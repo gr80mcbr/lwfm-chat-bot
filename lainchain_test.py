@@ -4,8 +4,16 @@ from langchain.chat_models import ChatOpenAI
 from langchain.chains.conversation.memory import ConversationBufferWindowMemory
 import os
 
+from lwfm.base.Site import Site
+from lwfm.base.JobDefn import JobDefn
+from lwfm.base.JobStatus import JobStatus, JobStatusValues
+from lwfm.server.JobStatusSentinelClient import JobStatusSentinelClient
+
 #os.environ['REQUESTS_CA_BUNDLE'] = 'C:\\Users\\gr80m\\anaconda3\\envs\\langchain\\Lib\\site-packages\\certifi\\cacert.pem'
-os.environ['OPENAI_API_KEY'] = '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'
+os.environ['OPENAI_API_KEY'] = ''
+
+# one Site for this example - construct an interface to the Site
+localSite = Site.getSiteInstanceFactory(siteName)
 
 turbo_llm = ChatOpenAI(
 	temperature=0,
@@ -56,6 +64,11 @@ def fake_upload(input={}):
 		processing = False
 	print("uploading " + filePath + " as " + fileName + " to " + storageLocation)
 
+def local_login()
+	# a "local" Site login is generally a no-op
+	localSite.getAuthDriver().login()
+	print("Log in Successful")
+
 
 life_tool = Tool(
 	name="Meaning of Life",
@@ -75,7 +88,13 @@ upload_tool = Tool(
 	description="Useful when the user wants to upload a file.  Input should be a python dictionary with values for these fields: fileName, filePath, storageLocation"
 )
 
-tools = [life_tool, command_tool, upload_tool]
+login_tool = Tool(
+	name="Local Login Tool",
+	func=local_login,
+	description="Useful when the user wants to log into to an application called lwfm locally.  The local login should also be the default login function."
+)
+
+tools = [life_tool, command_tool, upload_tool, login_tool]
 
 memory = ConversationBufferWindowMemory(
 	memory_key="chat_history",
@@ -99,4 +118,3 @@ while True:
 	if user_input == "exit":
 		break
 	conversational_agent(user_input)
-
