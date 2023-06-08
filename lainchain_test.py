@@ -13,7 +13,7 @@ from lwfm.server.JobStatusSentinelClient import JobStatusSentinelClient
 os.environ['OPENAI_API_KEY'] = ''
 
 # one Site for this example - construct an interface to the Site
-localSite = Site.getSiteInstanceFactory(siteName)
+localSite = Site.getSiteInstanceFactory("local")
 
 turbo_llm = ChatOpenAI(
 	temperature=0,
@@ -64,7 +64,7 @@ def fake_upload(input={}):
 		processing = False
 	print("uploading " + filePath + " as " + fileName + " to " + storageLocation)
 
-def local_login()
+def local_login(input={}):
 	# a "local" Site login is generally a no-op
 	localSite.getAuthDriver().login()
 	print("Log in Successful")
