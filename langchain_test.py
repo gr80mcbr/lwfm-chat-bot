@@ -14,6 +14,7 @@ from lwfm.base.JobStatus import JobStatus, JobStatusValues
 from lwfm.base.SiteFileRef import SiteFileRef, FSFileRef
 from lwfm.server.JobStatusSentinelClient import JobStatusSentinelClient
 from langchain.utilities import GoogleSearchAPIWrapper
+from pathlib import Path
 
 #os.environ['REQUESTS_CA_BUNDLE'] = 'C:\\Users\\gr80m\\anaconda3\\envs\\langchain\\Lib\\site-packages\\certifi\\cacert.pem'
 class ChatBot():
@@ -37,22 +38,28 @@ class ChatBot():
 		    func=search.run,
 		)
 
+		random_number_tool = Tool(
+			name="Random Number Generator",
+		    description="Useful when the user needs a random number.",
+		    func=self.generate_random_integer,
+		)
+
 		command_tool = Tool(
 			name="Command Tool",
 			func=self.command,
-			description="Useful when the user is giving a command.  Input can only be the following: test, yell, whisper, build, or jumpshot"
+			description="Useful when the user is giving a command (make sure to differentiate between a command and a job.  Input can only be the following: test, yell, whisper, build, or jumpshot"
 		)
 
 		upload_tool = Tool(
 			name="Upload Tool",
 			func=self.put,
-			description="Useful when the user wants to upload a file.  Input should be a python dictionary with optional values for these fields: file:str, metadata:dict"
+			description="Useful when the user wants to upload a file.  Input should be a python dictionary with optional values for these fields: file:str, fileDestination:str, metadata:dict"
 		)
 
 		download_tool = Tool(
 			name="Download Tool",
 			func=self.get,
-			description="Useful when the user wants to download a file.  Input should be a python dictionary with optional values for these fields: fileId:str, fileDestination: str"
+			description="Useful when the user wants to download a file.  Input should be a python dictionary with optional values for these fields: fileId:str, filePath: str, fileDestination: str"
 		)
 
 		find_tool = Tool(
@@ -72,10 +79,16 @@ class ChatBot():
 			name="Submit Job Tool",
 			func=self.submitJob,
 			description="""Useful when the user wants to submit a job.  The input 
-			is a dict with optional values for these fields: name:str, computeType:str, entryPoint:str, jobArgs:dict"""
+			is a dict with optional values for these fields: entryPoint:str"""
 		)
 
-		tools = [command_tool, login_tool, upload_tool, download_tool, find_tool, submit_job_tool, google_tool]
+		loop_tool = Tool(
+			name="Loop Tool",
+			func=self.loop,
+			description="""Useful when the user wants to loop.  The input will be a dictionary with an iteration int and an instruction"""
+		)
+
+		tools = [command_tool, login_tool, upload_tool, download_tool, find_tool, submit_job_tool, google_tool, random_number_tool, loop_tool]
 
 		memory = ConversationBufferWindowMemory(
 			memory_key="chat_history",
@@ -88,7 +101,7 @@ class ChatBot():
 			tools=tools,
 			llm=turbo_llm,
 			verbose=True,
-			max_iterations=10,
+			max_iterations=20,
 			early_stopping_method='generate',
 			memory=memory
 		)
@@ -120,6 +133,17 @@ class ChatBot():
 			print(result)
 			return result
 
+	# Generate a random integer between a given range (inclusive)
+	def generate_random_integer(self, input):
+	    return random.randint(1, 100)
+
+	def loop(self, loop):
+		parsed_int = int(loop['iteration'])
+		parsed_int = parsed_int - 1
+		if parsed_int < 1:
+			return "Okay stop"
+		return loop['instruction'] + " again " + str(parsed_int) + " times"
+
 	def login(self, input=''):
 		self.site.getAuthDriver().login()
 		print("Log in Successful")
@@ -141,11 +165,8 @@ class ChatBot():
 
 		logging.info("login successful")
 		status = self.site.getRunDriver().submitJob(jobDefn)
-		print("getting context")
 		context = status.getJobContext()
-		print("getting status")
 		status = self.site.getRunDriver().getJobStatus(context)
-		print("this is the status: " + str(status.isTerminal()))
 		while (not status.isTerminal()):
 			time.sleep(15)
 			print("getting status")
@@ -154,24 +175,29 @@ class ChatBot():
 		return "Job has completed."
 
 	def put(self, repoDict={}):
-	    fileRef = FSFileRef()
-	    if "file" in repoDict:
-	        file = os.path.realpath(repoDict["file"])
-	        fileRef = FSFileRef.siteFileRefFromPath(file)
-	        if "metadata" in repoDict:
-	            fileRef.setMetadata(repoDict["metadata"])
-	    destFileRef = FSFileRef.siteFileRefFromPath(os.path.expanduser('~'))
-	    self.site.getRepoDriver().put(file, destFileRef)
-	    print(file + " Successfully uploaded")
-	    return file + " Successfully uploaded"
+		fileRef = FSFileRef()
+		file = os.path.realpath(repoDict["file"])
+		fileRef = FSFileRef.siteFileRefFromPath(file)
+		if "metadata" in repoDict:
+			fileRef.setMetadata(repoDict["metadata"])
+		destFileRef = FSFileRef.siteFileRefFromPath(repoDict["fileDestination"])
+		file_path = Path(file)
+		self.site.getRepoDriver().put(file_path, destFileRef)
+		print(file + " Successfully uploaded")
+		return file + " Successfully uploaded"
 
 	def get(self, repoDict={}):
+		fileRef = FSFileRef()
+
 		if "fileId" in repoDict:
 			fileId = repoDict["fileId"]
+			fileRef.setId(fileId)
+		if "filePath" in repoDict:
+			filePath = repoDict["filePath"]
+			fileRef.setPath(filePath)
 		if "fileDestination" in repoDict:
 			fileDestination = repoDict["fileDestination"]
-		fileRef = FSFileRef()
-		fileRef.setId(fileId)
+		
 		destPath = Path(fileDestination)
 		self.site.getRepoDriver().get(fileRef, destPath)
 		print("File has been Successfully downloaded.")
@@ -182,10 +208,10 @@ class ChatBot():
 		if "fileId" in repoDict:
 			fileRef.setId(repoDict["fileId"])
 		if "name" in repoDict:
-			fileRef.setId(repoDict["name"])
+			fileRef.setName(repoDict["name"])
 		if "metadata" in repoDict:
-			fileRef.setId(repoDict["metadata"])
-		print ("File: ID: " + fileRef.getId() + ", File Name: " + fileRef.getName() + ", Metadata: " + str(fileRef.getMetadata()))
+			fileRef.setMetadata(repoDict["metadata"])
+		print ("File: ID: " + str(fileRef.getId()) + ", File Name: " + str(fileRef.getName()) + ", Metadata: " + str(fileRef.getMetadata()))
 		return self.site.getRepoDriver().find(fileRef)
 
 	def runChatbot(self):
@@ -209,3 +235,4 @@ if __name__ == '__main__':
 	os.environ["GOOGLE_API_KEY"] = tokens['google_cse']
 
 	ChatBot(tokens).runChatbot()
+	#I want you to find out how many career points michael jordan has.  Then I want you to run a job with this entry point: echo 'Michael Jordan scored {{totalPoints}} points'
