@@ -216,9 +216,9 @@ class ChatBot():
 
 	def runChatbot(self, template=None):
 		if template:
-			user_lines = read_file_to_list(template)
+			user_lines = self.read_file_to_list(template)
 			for line in user_lines:
-				self.conversational_agent(user_input)
+				self.conversational_agent(line)
 		else:
 			user_responses = []
 			print("Chatbot: Hello, How can I assist you today?")
@@ -228,29 +228,33 @@ class ChatBot():
 					break
 				elif user_input.lower() == "save":
 					file_path = input("Where would you like to save the chat template file: ")
-					write_list_to_file(file_path, user_responses)
+					self.write_list_to_file(file_path, user_responses)
 				else:
 					user_responses.append(user_input)
 					self.conversational_agent(user_input)
 
-	def read_file_to_list(file_path):
+	def read_file_to_list(self, file_path):
 	    lines_list = []
 	    with open(file_path, 'r') as file:
 	        for line in file:
 	            lines_list.append(line.strip())
 	    return lines_list
 
-	def write_list_to_file(file_path, lines_list):
+	def write_list_to_file(self, file_path, lines_list):
 	    with open(file_path, 'w') as file:
 	        for line in lines_list:
 	            file.write(line + '\n')
 
 if __name__ == '__main__':
 	print("running main")
+
 	openai_token = sys.argv[1]
 	google_token = sys.argv[2]
 	google_cse_id = sys.argv[3]
-	template = sys.argv[4]
+	if len(sys.argv) > 4:
+		template = sys.argv[4]
+	else:
+		template = None
 
 	tokens = {"openai":openai_token, "google":google_token, "google_cse":google_cse_id}
 
