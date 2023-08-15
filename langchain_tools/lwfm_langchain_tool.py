@@ -4,44 +4,50 @@ from lwfm.base.JobStatus import JobStatus, JobStatusValues
 from lwfm.base.SiteFileRef import SiteFileRef, FSFileRef
 from lwfm.server.JobStatusSentinelClient import JobStatusSentinelClient
 
+from langchain.agents import Tool
+
 import os
 import sys
 import time
 import logging
+from pathlib import Path
 
 class LwfmTool():
 
-	upload_tool = Tool(
-		name="Upload Tool",
-		func=self.put,
-		description="Useful when the user wants to upload a file.  Input should be a python dictionary with optional values for these fields: file:str, fileDestination:str, metadata:dict"
-	)
+	def __init__(self):
+		self.site = Site.getSiteInstanceFactory("local")
 
-	download_tool = Tool(
-		name="Download Tool",
-		func=self.get,
-		description="Useful when the user wants to download a file.  Input should be a python dictionary with optional values for these fields: fileId:str, filePath: str, fileDestination: str"
-	)
+		self.upload_tool = Tool(
+			name="Upload Tool",
+			func=self.put,
+			description="Useful when the user wants to upload a file.  Input should be a python dictionary with optional values for these fields: file:str, fileDestination:str, metadata:dict"
+		)
 
-	find_tool = Tool(
-		name="Find Tool",
-		func=self.find,
-		description="""Useful when the user wants to find a file reference.  Input should be a python dictionary 
-		with optional values for these fields: fileId:str, fileName:str, metadata:dict.  The output is a FSFileRef Object that has a getId() method that can be used to download the file."""
-	)
+		self.download_tool = Tool(
+			name="Download Tool",
+			func=self.get,
+			description="Useful when the user wants to download a file.  Input should be a python dictionary with optional values for these fields: fileId:str, filePath: str, fileDestination: str"
+		)
 
-	login_tool = Tool(
-		name="Login Tool",
-		func=self.login,
-		description="Useful when the user wants to log in"
-	)
+		self.find_tool = Tool(
+			name="Find Tool",
+			func=self.find,
+			description="""Useful when the user wants to find a file reference.  Input should be a python dictionary 
+			with optional values for these fields: fileId:str, fileName:str, metadata:dict.  The output is a FSFileRef Object that has a getId() method that can be used to download the file."""
+		)
 
-	submit_job_tool = Tool(
-		name="Submit Job Tool",
-		func=self.submitJob,
-		description="""Useful when the user wants to submit a job.  The input 
-		is a dict with optional values for these fields: entryPoint:str"""
-	)
+		self.login_tool = Tool(
+			name="Login Tool",
+			func=self.login,
+			description="Useful when the user wants to log in"
+		)
+
+		self.submit_job_tool = Tool(
+			name="Submit Job Tool",
+			func=self.submitJob,
+			description="""Useful when the user wants to submit a job.  The input 
+			is a dict with optional values for these fields: entryPoint:str"""
+		)
 
 	def login(self, input=''):
 		self.site.getAuthDriver().login()
