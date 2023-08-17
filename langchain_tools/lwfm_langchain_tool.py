@@ -1,6 +1,6 @@
 from lwfm.base.Site import Site
 from lwfm.base.JobDefn import JobDefn
-from lwfm.base.JobStatus import JobStatus, JobStatusValues
+from lwfm.base.JobStatus import JobStatus, JobContext, JobStatusValues
 from lwfm.base.SiteFileRef import SiteFileRef, FSFileRef
 from lwfm.server.JobStatusSentinelClient import JobStatusSentinelClient
 
@@ -16,6 +16,7 @@ class LwfmTool():
 
 	def __init__(self):
 		self.site = Site.getSiteInstanceFactory("local")
+		self.jobContext = None
 
 		self.upload_tool = Tool(
 			name="Upload Tool",
@@ -69,7 +70,7 @@ class LwfmTool():
 		self.site.getAuthDriver().login()
 
 		logging.info("login successful")
-		status = self.site.getRunDriver().submitJob(jobDefn)
+		status = self.site.getRunDriver().submitJob(jobDefn, self.jobContext)
 		context = status.getJobContext()
 		status = self.site.getRunDriver().getJobStatus(context)
 		while (not status.isTerminal()):
@@ -87,7 +88,7 @@ class LwfmTool():
 			fileRef.setMetadata(repoDict["metadata"])
 		destFileRef = FSFileRef.siteFileRefFromPath(repoDict["fileDestination"])
 		file_path = Path(file)
-		self.site.getRepoDriver().put(file_path, destFileRef)
+		self.site.getRepoDriver().put(file_path, destFileRef, self.jobContext)
 		print(file + " Successfully uploaded")
 		return file + " Successfully uploaded"
 
@@ -104,7 +105,7 @@ class LwfmTool():
 			fileDestination = repoDict["fileDestination"]
 		
 		destPath = Path(fileDestination)
-		self.site.getRepoDriver().get(fileRef, destPath)
+		self.site.getRepoDriver().get(fileRef, destPath, self.jobContext)
 		print("File has been Successfully downloaded.")
 		return "The file has been Successfully downloaded"
 

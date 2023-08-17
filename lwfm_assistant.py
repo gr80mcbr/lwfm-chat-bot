@@ -52,7 +52,7 @@ class LwfmAssistant():
 	def runChatbot(self, template=None, template_input=None):
 		if template:
 			if template_input:
-				self.conversational_agent("I have this python dictionary which contains a list of parameter fields and values, say it back to me and then remember it for future reference " + str(template_input))
+				self.conversational_agent("I have this python dictionary which contains a list of parameter fields and values, remember it for future reference " + str(template_input))
 			user_lines = self.read_file_to_list(template)
 			for line in user_lines:
 				self.conversational_agent(line)
@@ -104,6 +104,6 @@ if __name__ == '__main__':
 
 	for i in range(5):
 		print("Running chatbot loop.  Current loop: " + str(i))
-		template_input = {"outputFileName":"output" + str(i)}
+		template_input = {"outputFileName":"output" + str(i+1)}
 		chatbot.runChatbot(template, template_input)
 		#user_input = input("Hit enter to continue:")
