@@ -16,7 +16,7 @@ class LwfmTool():
 
 	def __init__(self):
 		self.site = Site.getSiteInstanceFactory("local")
-		self.jobContext = None
+		self.jobContext = JobContext()
 
 		self.upload_tool = Tool(
 			name="Upload Tool",
@@ -27,7 +27,7 @@ class LwfmTool():
 		self.download_tool = Tool(
 			name="Download Tool",
 			func=self.get,
-			description="Useful when the user wants to download a file.  Input should be a python dictionary with optional values for these fields: fileId:str, filePath: str, fileDestination: str"
+			description="Useful when the user wants to download a file.  Input should be a python dictionary with optional values for these fields: filePath: str, fileDestination: str"
 		)
 
 		self.find_tool = Tool(
@@ -111,8 +111,6 @@ class LwfmTool():
 
 	def find(self, repoDict={}):
 		fileRef = FSFileRef()
-		if "fileId" in repoDict:
-			fileRef.setId(repoDict["fileId"])
 		if "name" in repoDict:
 			fileRef.setName(repoDict["name"])
 		if "metadata" in repoDict:

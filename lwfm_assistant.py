@@ -34,10 +34,10 @@ class LwfmAssistant():
 			return_messages=True
 		)
 
-		util = UtilTool()
-		lwfm = LwfmTool()
+		self.util = UtilTool()
+		self.lwfm = LwfmTool()
 
-		tools = [lwfm.login_tool, lwfm.upload_tool, lwfm.download_tool, lwfm.find_tool, lwfm.submit_job_tool, util.command_tool, util.google_tool, util.random_number_tool]
+		tools = [self.lwfm.login_tool, self.lwfm.upload_tool, self.lwfm.download_tool, self.lwfm.find_tool, self.lwfm.submit_job_tool, self.util.command_tool, self.util.google_tool, self.util.random_number_tool]
 
 		self.conversational_agent = initialize_agent(
 			agent='chat-conversational-react-description',
@@ -49,12 +49,17 @@ class LwfmAssistant():
 			memory=memory
 		)
 
-	def runChatbot(self, template=None, template_input=None):
+	def runChatbot(self, template=None, template_input=None, project_context=None):
+		print
+		if project_context:
+			context = self.read_file_into_string(project_context)
+			self.conversational_agent("Do not call any of the tools just yet.  Just remember the following for future reference:" + self.read_file_into_string(project_context))
 		if template:
-			if template_input:
-				self.conversational_agent("I have this python dictionary which contains a list of parameter fields and values, remember it for future reference " + str(template_input))
+			# if template_input:
+			# 	self.conversational_agent("I have this python dictionary which contains a list of generic parameter fields and values that could be referenced by the user for anything, remember it for future reference " + str(template_input))
 			user_lines = self.read_file_to_list(template)
 			for line in user_lines:
+				print("User: " + line)
 				self.conversational_agent(line)
 		else:
 			user_responses = []
@@ -77,6 +82,16 @@ class LwfmAssistant():
 	            lines_list.append(line.strip())
 	    return lines_list
 
+	def read_file_into_string(self, file_path):
+	    try:
+	        with open(file_path, 'r') as file:
+	            content = file.read()
+	        return content
+	    except FileNotFoundError:
+	        return "File not found."
+	    except Exception as e:
+	        return f"An error occurred: {str(e)}"
+
 	def write_list_to_file(self, file_path, lines_list):
 	    with open(file_path, 'w') as file:
 	        for line in lines_list:
@@ -85,25 +100,24 @@ class LwfmAssistant():
 if __name__ == '__main__':
 	print("running main")
 
-	parser = argparse.ArgumentParser(description='''The LWFM assistant.  This is an openai chatbot that can make lwfm if the user intructs it to do so.''')
+	parser = argparse.ArgumentParser(description='''The LWFM assistant.  This is an openai chatbot that can make lwfm calls if the user intructs it to do so.''')
 
 	parser.add_argument('openai', type=str, help='OpenAi token used to connect to OpenAi')
 	parser.add_argument('--google', type=str, help='Google token used to connect to Google Ai')
 	parser.add_argument('--google_cse', type=str, help='ID of the google search engine you would like to use.')
 	parser.add_argument('--template', type=str, help='A template from a previously saved conversation with lwfm assistamnt to be reran (essentially a workflow).')
 	parser.add_argument('--template_input', type=dict, help='A dictionary of paramters that can be used within the template.  The template can reverence them with {{paramName}}')
+	parser.add_argument('--project_context', type=str, help='A dictionary of paramters that can be used within the template.  The template can reverence them with {{paramName}}')
 
-	parser.set_defaults(google_token=None, google_cse_id=None, template=None, template_input=None)
+	parser.set_defaults(google=None, google_cse=None, template=None, template_input=None, project_context=None)
 
 	args = vars(parser.parse_args())
 
-	chatbot = LwfmAssistant(args)
-
 	template = args["template"]
 	template_input = args["template_input"]
+	project_context = args["project_context"]
 
-	for i in range(5):
-		print("Running chatbot loop.  Current loop: " + str(i))
-		template_input = {"outputFileName":"output" + str(i+1)}
-		chatbot.runChatbot(template, template_input)
-		#user_input = input("Hit enter to continue:")
+	#for i in range(5):
+	chatbot = LwfmAssistant(args)
+	template_input = {"outputFileName":"outputFile"}
+	chatbot.runChatbot(template, template_input, project_context)
