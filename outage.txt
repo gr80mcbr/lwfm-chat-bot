@@ -1,0 +1,118 @@
+<template>
+  <div>
+    <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
+    <table class="table-auto w-full border-collapse border border-gray-300">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="border px-4 py-2">Date</th>
+          <th class="border px-4 py-2">Type</th>
+          <th class="border px-4 py-2">Start</th>
+          <th class="border px-4 py-2">End</th>
+          <th class="border px-4 py-2">Duration</th>
+          <th class="border px-4 py-2">Comment</th>
+          <th class="border px-4 py-2">Engineer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(outage, index) in outages" :key="index">
+          <td class="border px-4 py-2">{{ outage.date }}</td>
+          <td class="border px-4 py-2">{{ outage.outageType }}</td>
+          <td class="border px-4 py-2">{{ outage.start }}</td>
+          <td class="border px-4 py-2">{{ outage.end }}</td>
+          <td class="border px-4 py-2">{{ outage.duration }}</td>
+          <td class="border px-4 py-2">{{ outage.comment }}</td>
+          <td class="border px-4 py-2">{{ outage.engineer }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    outages: {
+      type: Array,
+      required: true,
+    },
+  },
+};
+</script>
+
+<style scoped>
+/* Add custom styles here */
+</style>
+
+
+
+<template>
+  <div>
+    <h2 class="text-xl font-bold mb-4">Add Outage</h2>
+    <form @submit.prevent="handleSubmit">
+      <div class="mb-4">
+        <label for="date" class="block text-gray-700">Date</label>
+        <input v-model="form.date" id="date" type="date" class="w-full border px-3 py-2" />
+      </div>
+      <div class="mb-4">
+        <label for="outageType" class="block text-gray-700">Outage Type</label>
+        <input v-model="form.outageType" id="outageType" type="text" class="w-full border px-3 py-2" />
+      </div>
+      <div class="mb-4">
+        <label for="start" class="block text-gray-700">Start</label>
+        <input v-model="form.start" id="start" type="time" class="w-full border px-3 py-2" />
+      </div>
+      <div class="mb-4">
+        <label for="end" class="block text-gray-700">End</label>
+        <input v-model="form.end" id="end" type="time" class="w-full border px-3 py-2" />
+      </div>
+      <div class="mb-4">
+        <label for="duration" class="block text-gray-700">Duration</label>
+        <input v-model="form.duration" id="duration" type="text" class="w-full border px-3 py-2" />
+      </div>
+      <div class="mb-4">
+        <label for="comment" class="block text-gray-700">Comment</label>
+        <textarea v-model="form.comment" id="comment" class="w-full border px-3 py-2"></textarea>
+      </div>
+      <div class="mb-4">
+        <label for="engineer" class="block text-gray-700">Engineer</label>
+        <input v-model="form.engineer" id="engineer" type="text" class="w-full border px-3 py-2" />
+      </div>
+      <button type="submit" class="bg-blue-500 text-white px-4 py-2">Submit</button>
+    </form>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      form: {
+        date: "",
+        outageType: "",
+        start: "",
+        end: "",
+        duration: "",
+        comment: "",
+        engineer: "",
+      },
+    };
+  },
+  methods: {
+    handleSubmit() {
+      this.$emit("submit", { ...this.form });
+      this.resetForm();
+    },
+    resetForm() {
+      this.form = {
+        date: "",
+        outageType: "",
+        start: "",
+        end: "",
+        duration: "",
+        comment: "",
+        engineer: "",
+      };
+    },
+  },
+};
+</script>
