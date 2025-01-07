@@ -1,26 +1,79 @@
-SELECT 
-    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
-    j.queue_id,
-    AVG(TIMESTAMPDIFF(SECOND, GREATEST(j.submission_date, periods.month_start), 
-                      LEAST(j.start_time, periods.month_end))) / 3600 AS pend_hours,
-    SUM(
-        (TIMESTAMPDIFF(SECOND, 
-            GREATEST(j.start_time, periods.month_start), 
-            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-        ) / 3600) * j.ngpu
-    ) AS gpu_hours
-FROM (
-    SELECT 
-        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH), '%Y-%m-01') AS month_start,
-        LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH)) AS month_end
-    FROM (
-        SELECT 0 AS num UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 
-        UNION ALL SELECT 4 UNION ALL SELECT 5
-    ) m
-) periods
-LEFT JOIN job_hal_mlaas j
-ON j.submission_date < periods.month_end 
-   AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
-WHERE j.queue_id = 'mlaas'
-GROUP BY periods.month_start, periods.month_end, j.queue_id
-ORDER BY periods.month_start DESC;
+WITH job_duration AS (
+    SELECT
+        sitid,
+        site_name,
+        job_id,
+        start_time,
+        complete_date,
+        ngpu,
+        TIMESTAMPDIFF(SECOND, start_time, IFNULL(complete_date, NOW())) / 3600 AS job_duration_hours,
+        submission_date,
+        CASE
+            WHEN start_time = '0000-00-00 00:00:00' THEN NOW()
+            ELSE start_time
+        END AS actual_start_time,
+        CASE
+            WHEN complete_date = '0000-00-00 00:00:00' THEN NOW()
+            ELSE complete_date
+        END AS actual_complete_date
+    FROM job_hal_mlaas
+    WHERE submission_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+),
+monthly_data AS (
+    SELECT
+        sitid,
+        site_name,
+        job_id,
+        ngpu,
+        job_duration_hours,
+        actual_start_time,
+        actual_complete_date,
+        -- Calculate pend time (difference between submission and start time)
+        TIMESTAMPDIFF(SECOND, submission_date, actual_start_time) / 3600 AS pend_time_hours,
+        -- Break down job duration for each of the last 6 months
+        CASE
+            WHEN actual_start_time < DATE_FORMAT(CURRENT_DATE - INTERVAL 5 MONTH, '%Y-%m-01')
+            THEN 0
+            ELSE LEAST(TIMESTAMPDIFF(SECOND, GREATEST(actual_start_time, DATE_FORMAT(CURRENT_DATE - INTERVAL 5 MONTH, '%Y-%m-01')), actual_complete_date) / 3600, job_duration_hours)
+        END AS month_1_duration,
+        CASE
+            WHEN actual_start_time < DATE_FORMAT(CURRENT_DATE - INTERVAL 4 MONTH, '%Y-%m-01')
+            THEN 0
+            ELSE LEAST(TIMESTAMPDIFF(SECOND, GREATEST(actual_start_time, DATE_FORMAT(CURRENT_DATE - INTERVAL 4 MONTH, '%Y-%m-01')), actual_complete_date) / 3600, job_duration_hours)
+        END AS month_2_duration,
+        CASE
+            WHEN actual_start_time < DATE_FORMAT(CURRENT_DATE - INTERVAL 3 MONTH, '%Y-%m-01')
+            THEN 0
+            ELSE LEAST(TIMESTAMPDIFF(SECOND, GREATEST(actual_start_time, DATE_FORMAT(CURRENT_DATE - INTERVAL 3 MONTH, '%Y-%m-01')), actual_complete_date) / 3600, job_duration_hours)
+        END AS month_3_duration,
+        CASE
+            WHEN actual_start_time < DATE_FORMAT(CURRENT_DATE - INTERVAL 2 MONTH, '%Y-%m-01')
+            THEN 0
+            ELSE LEAST(TIMESTAMPDIFF(SECOND, GREATEST(actual_start_time, DATE_FORMAT(CURRENT_DATE - INTERVAL 2 MONTH, '%Y-%m-01')), actual_complete_date) / 3600, job_duration_hours)
+        END AS month_4_duration,
+        CASE
+            WHEN actual_start_time < DATE_FORMAT(CURRENT_DATE - INTERVAL 1 MONTH, '%Y-%m-01')
+            THEN 0
+            ELSE LEAST(TIMESTAMPDIFF(SECOND, GREATEST(actual_start_time, DATE_FORMAT(CURRENT_DATE - INTERVAL 1 MONTH, '%Y-%m-01')), actual_complete_date) / 3600, job_duration_hours)
+        END AS month_5_duration,
+        CASE
+            WHEN actual_start_time < DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')
+            THEN 0
+            ELSE LEAST(TIMESTAMPDIFF(SECOND, GREATEST(actual_start_time, DATE_FORMAT(CURRENT_DATE, '%Y-%m-01')), actual_complete_date) / 3600, job_duration_hours)
+        END AS month_6_duration
+    FROM job_duration
+)
+SELECT
+    sitid,
+    site_name,
+    job_id,
+    ROUND(SUM(month_1_duration * ngpu), 2) AS month_1_gpu_utilization,
+    ROUND(SUM(month_2_duration * ngpu), 2) AS month_2_gpu_utilization,
+    ROUND(SUM(month_3_duration * ngpu), 2) AS month_3_gpu_utilization,
+    ROUND(SUM(month_4_duration * ngpu), 2) AS month_4_gpu_utilization,
+    ROUND(SUM(month_5_duration * ngpu), 2) AS month_5_gpu_utilization,
+    ROUND(SUM(month_6_duration * ngpu), 2) AS month_6_gpu_utilization,
+    ROUND(AVG(pend_time_hours), 2) AS avg_pend_time_hours
+FROM monthly_data
+GROUP BY sitid, site_name, job_id
+ORDER BY site_name, job_id
