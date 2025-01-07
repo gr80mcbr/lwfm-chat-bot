@@ -1,3 +1,41 @@
+WITH job_data AS (
+    SELECT 
+        DATE_FORMAT(submission_date, '%Y-%m') AS report_date,
+        GREATEST(
+            IF(start_time = '0000-00-00 00:00:00', NOW(), start_time),
+            STR_TO_DATE(CONCAT(YEAR(NOW()), '-', MONTH(NOW()) - 6, '-15'), '%Y-%m-%d')
+        ) AS actual_start_time,
+        LEAST(
+            IF(complete_date = '0000-00-00 00:00:00', NOW(), complete_date),
+            LAST_DAY(submission_date)
+        ) AS actual_end_time,
+        TIMESTAMPDIFF(HOUR, submission_date, start_time) AS pend_hours,
+        TIMESTAMPDIFF(HOUR, start_time, complete_date) * ngpu AS gpu_hours,
+        queue_id
+    FROM job_hal_mlaas
+    WHERE 
+        queue_id = 'mlaas'
+        AND submission_date >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+),
+monthly_data AS (
+    SELECT 
+        DATE_FORMAT(actual_start_time, '%Y-%m') AS report_month,
+        AVG(pend_hours) AS avg_pend_hours,
+        SUM(gpu_hours) AS total_gpu_hours
+    FROM job_data
+    WHERE 
+        actual_start_time >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+    GROUP BY report_month
+)
+SELECT 
+    report_month AS report_date,
+    ROUND(avg_pend_hours, 2) AS average_pend_hours_per_job,
+    ROUND(total_gpu_hours, 2) AS total_gpu_hours
+FROM monthly_data
+ORDER BY report_month DESC;
+
+
+
 WITH job_duration AS (
     SELECT
         queue_id,
