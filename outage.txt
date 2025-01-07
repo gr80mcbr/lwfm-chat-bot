@@ -1,102 +1,27 @@
-import { defineStore } from 'pinia';
-
-export const useOutageStore = defineStore('outage', {
-  state: () => ({
-    outages: [], // List of outages
-  }),
-  actions: {
-    addOutage(outage) {
-      this.outages.push(outage);
-    },
-    removeOutage(index) {
-      this.outages.splice(index, 1);
-    },
-  },
-});
-};
-</script>
-
-
-
-
-
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import App from './App.vue';
-
-const app = createApp(App);
-app.use(createPinia());
-app.mount('#app');
-
-
-
-
-<script>
-import { useOutageStore } from '../stores/outage';
-
-export default {
-  setup() {
-    const outageStore = useOutageStore();
-    return { outageStore };
-  },
-};
-</script>
-
-
-
-
-import { createRouter, createWebHistory } from 'vue-router';
-import OutageTable from '../components/OutageTable.vue';
-import OutageForm from '../components/OutageForm.vue';
-
-const routes = [
-  { path: '/', component: OutageTable },
-  { path: '/add', component: OutageForm },
-];
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes,
-});
-
-export default router;
-
-
-
-
-import { createApp } from 'vue';
-import App from './App.vue';
-import router from './router';
-
-createApp(App).use(router).mount('#app');
-
-
-
-
-
-<template>
-  <nav>
-    <router-link to="/">Home</router-link> |
-    <router-link to="/add">Add Outage</router-link>
-  </nav>
-  <router-view></router-view>
-</template>
-
-
-
-
-
-
-# Use a Node image to build the app
-FROM node:18 as build-stage
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-# Use an Nginx image to serve the app
-FROM nginx:stable-alpine as production-stage
-COPY --from=build-stage /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+SELECT 
+    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
+    j.queue_id,
+    AVG(TIMESTAMPDIFF(SECOND, GREATEST(j.submission_date, periods.month_start), 
+                      LEAST(j.start_time, periods.month_end))) / 3600 AS pend_hours,
+    SUM(
+        (TIMESTAMPDIFF(SECOND, 
+            GREATEST(j.start_time, periods.month_start), 
+            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+        ) / 3600) * j.ngpu
+    ) AS gpu_hours
+FROM (
+    SELECT 
+        DATE_FORMAT(DATE_ADD(DATE_SUB(NOW(), INTERVAL DAY(NOW()) - 1 DAY), INTERVAL m.num MONTH), '%Y-%m-01') AS month_start,
+        LAST_DAY(DATE_ADD(DATE_SUB(NOW(), INTERVAL DAY(NOW()) - 1 DAY), INTERVAL m.num MONTH)) AS month_end
+    FROM (
+        SELECT 0 AS num UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 
+        UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 
+        UNION ALL SELECT 8 UNION ALL SELECT 9 UNION ALL SELECT 10 UNION ALL SELECT 11
+    ) m
+) periods
+LEFT JOIN job_hal_mlaas j
+ON j.submission_date < periods.month_end 
+   AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
+WHERE j.queue_id = 'mlaas'
+GROUP BY periods.month_start, periods.month_end, j.queue_id
+ORDER BY periods.month_start DESC;
