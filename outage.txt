@@ -1,4 +1,36 @@
 SELECT
+    j.job_id,
+    j.queue_id,
+    j.submission_date,
+    j.start_time,
+    j.complete_date,
+    j.ngpu,
+    TIMESTAMPDIFF(SECOND, j.submission_date, j.start_time) / 3600 AS pend_hours,
+    TIMESTAMPDIFF(
+        SECOND,
+        GREATEST(j.start_time, '2024-12-01 00:00:00'),
+        LEAST(IFNULL(j.complete_date, '2024-12-31 23:59:59'), '2024-12-31 23:59:59')
+    ) / 3600 AS gpu_hours,
+    CASE
+        WHEN j.start_time >= '2024-12-01 00:00:00' AND (j.complete_date <= '2024-12-31 23:59:59' OR j.complete_date IS NULL) THEN 'Full Job in December'
+        WHEN j.start_time < '2024-12-01 00:00:00' AND (j.complete_date >= '2024-12-01 00:00:00') THEN 'Started Before, Running in December'
+        WHEN j.start_time < '2024-12-01 00:00:00' AND j.complete_date >= '2024-12-01 00:00:00' AND j.complete_date <= '2024-12-31 23:59:59' THEN 'Started Before, Completed in December'
+        ELSE 'Not In December'
+    END AS job_status
+FROM job j
+WHERE j.queue_id = 'mlaas'
+AND (
+    (j.start_time >= '2024-12-01 00:00:00' AND j.start_time < '2025-01-01 00:00:00')
+    OR
+    (j.complete_date >= '2024-12-01 00:00:00' AND (j.complete_date <= '2024-12-31 23:59:59' OR j.complete_date IS NULL))
+)
+ORDER BY j.start_time;
+
+
+
+
+
+SELECT
     DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
     j.queue_id,
     AVG(
