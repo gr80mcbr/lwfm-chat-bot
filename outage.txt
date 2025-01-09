@@ -1,3 +1,28 @@
+SELECT
+    dp.name AS desktop_pool_name,
+    DATE_TRUNC('month', s.start_time) AS session_month,
+    s.state,
+    COUNT(*) AS session_count
+FROM
+    session s
+JOIN
+    desktop_pool dp ON dp.id = s.desktop_pool_id
+WHERE
+    dp.name IN ('ML_LINUX_NEC', 'ML-LINUX-EC')
+GROUP BY
+    dp.name,
+    DATE_TRUNC('month', s.start_time),
+    s.state
+ORDER BY
+    desktop_pool_name,
+    session_month,
+    s.state;
+
+
+
+
+
+
 version: '3.8'
 
 services:
