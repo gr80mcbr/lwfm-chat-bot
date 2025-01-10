@@ -15,6 +15,34 @@ SELECT
     ) / 3600 * j.ngpu AS gpu_hours
 FROM job_hal_mlaas j
 WHERE j.queue_id = 'mlaas'
+AND j.start_time != '0000-00-00 00:00:00' -- Exclude unstarted jobs
+AND (
+    (j.start_time < '2024-11-01 00:00:00' AND j.complete_date >= '2024-10-01 00:00:00')
+    OR (j.start_time >= '2024-10-01 00:00:00' AND j.start_time < '2024-11-01 00:00:00')
+)
+ORDER BY j.start_time;
+
+
+
+
+
+SELECT
+    j.job_id,
+    j.queue_id,
+    j.submission_date,
+    j.start_time,
+    IF(j.complete_date = '0000-00-00 00:00:00', '2024-10-31 23:59:59', j.complete_date) AS complete_date,
+    j.ngpu,
+    TIMESTAMPDIFF(
+        SECOND,
+        GREATEST(j.start_time, '2024-10-01 00:00:00'),
+        LEAST(
+            IF(j.complete_date = '0000-00-00 00:00:00', '2024-10-31 23:59:59', j.complete_date),
+            '2024-10-31 23:59:59'
+        )
+    ) / 3600 * j.ngpu AS gpu_hours
+FROM job_hal_mlaas j
+WHERE j.queue_id = 'mlaas'
 AND (
     (j.start_time < '2024-11-01 00:00:00' AND j.complete_date >= '2024-10-01 00:00:00')
     OR (j.start_time >= '2024-10-01 00:00:00' AND j.start_time < '2024-11-01 00:00:00')
