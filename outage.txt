@@ -1,4 +1,47 @@
 SELECT
+    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
+    j.queue_id,
+    AVG(
+        TIMESTAMPDIFF(SECOND, j.submission_date, j.start_time) / 3600
+    ) AS pend_hours,
+    SUM(
+        TIMESTAMPDIFF(
+            SECOND,
+            GREATEST(j.start_time, periods.month_start),
+            LEAST(
+                IF(
+                    j.complete_date = '0000-00-00 00:00:00', 
+                    periods.month_end, 
+                    IFNULL(j.complete_date, periods.month_end)
+                ),
+                periods.month_end
+            )
+        ) / 3600 * j.ngpu
+    ) AS gpu_hours
+FROM (
+    SELECT
+        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH), '%Y-%m-15') AS month_start,
+        LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH)) AS month_end
+    FROM (
+        SELECT 0 AS num
+        UNION ALL SELECT 1
+        UNION ALL SELECT 2
+        UNION ALL SELECT 3
+        UNION ALL SELECT 4
+        UNION ALL SELECT 5
+    ) m
+) periods
+LEFT JOIN job_hal_mlaas j
+ON j.start_time < periods.month_end
+AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
+WHERE j.queue_id = 'mlaas'
+GROUP BY periods.month_start, periods.month_end, j.queue_id
+ORDER BY periods.month_start DESC;
+
+
+
+
+SELECT
     j.job_id,
     j.queue_id,
     j.submission_date,
