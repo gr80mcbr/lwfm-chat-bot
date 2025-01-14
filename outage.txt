@@ -39,13 +39,11 @@ mlaas_ai AS (
         job_data
     WHERE
         queue_id IN ('mlaas_infer', 'mlaas_hk_h100')
-    GROUP BY
-        queue_id
 ),
 combined_data AS (
     -- Combine all queue_ids including `mlaas_AI`
     SELECT queue_id, gpu_hours FROM job_data
-    WHERE queue_id NOT IN ('mlaas_infer', 'mlaas_hk_h100')
+    WHERE queue_id NOT IN ('mlaas_infer', 'mlaas_hk_h100') -- Exclude components of `mlaas_AI`
     UNION ALL
     SELECT queue_id, gpu_hours FROM mlaas_ai
 ),
@@ -54,7 +52,18 @@ utilization AS (
     SELECT
         queue_id,
         ROUND(
-            (gpu_hours / (40 * DATEDIFF(LAST_DAY(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)), DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')) * 24)) * 100,
+            (
+                gpu_hours / (
+                    CASE
+                        WHEN queue_id = 'mlaas' THEN 40
+                        WHEN queue_id = 'mlaas_a100' THEN 20
+                        WHEN queue_id = 'mlaas_h100' THEN 48
+                        WHEN queue_id = 'mlaas_p40' THEN 5
+                        WHEN queue_id = 'mlaas_AI' THEN 16
+                        ELSE 1 -- Default case to prevent division by zero
+                    END * DATEDIFF(LAST_DAY(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)), DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')) * 24
+                )
+            ) * 100,
             2
         ) AS utilization_percentage
     FROM
@@ -78,9 +87,11 @@ blended_utilization AS (
 -- Combine utilization data with the blended utilization row
 SELECT queue_id, utilization_percentage
 FROM utilization
+WHERE gpu_hours > 0 -- Exclude rows with 0 GPU hours
 UNION ALL
 SELECT queue_id, utilization_percentage
 FROM blended_utilization;
+
 
 
 
