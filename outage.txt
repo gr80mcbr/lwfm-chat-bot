@@ -7,7 +7,7 @@ WITH period AS (
 job_data AS (
     -- Aggregate GPU hours for all relevant queue_ids in the previous month.
     SELECT
-        j.queue_id,
+        j.queue_id COLLATE utf8mb4_general_ci AS queue_id, -- Standardize collation
         SUM(
             TIMESTAMPDIFF(
                 SECOND,
@@ -26,14 +26,16 @@ job_data AS (
         AND j.start_time != '0000-00-00 00:00:00'
         AND (j.complete_date >= p.month_start OR j.complete_date IS NULL)
     WHERE
-        j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40', 'mlaas_infer', 'mlaas_hk_h100')
+        j.queue_id COLLATE utf8mb4_general_ci IN (
+            'mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40', 'mlaas_infer', 'mlaas_hk_h100'
+        )
     GROUP BY
         j.queue_id, p.month_start, p.month_end
 ),
 mlaas_ai AS (
     -- Combine `mlaas_infer` and `mlaas_hk_h100` into `mlaas_AI`.
     SELECT
-        'mlaas_AI' AS queue_id,
+        'mlaas_AI' COLLATE utf8mb4_general_ci AS queue_id, -- Standardize collation
         SUM(gpu_hours) AS gpu_hours,
         month_start,
         month_end
@@ -82,6 +84,7 @@ FROM
     utilization u
 GROUP BY
     u.month_start, u.month_end, u.queue_id;
+
 
 
 
