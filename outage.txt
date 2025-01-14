@@ -5,7 +5,7 @@ WITH period AS (
         LAST_DAY(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) AS month_end
 ),
 job_data AS (
-    -- Aggregate GPU hours for all relevant queue_ids in the previous month.
+    -- Calculate GPU hours for all queue_ids in the previous month.
     SELECT
         j.queue_id,
         SUM(
@@ -14,9 +14,7 @@ job_data AS (
                 GREATEST(j.start_time, p.month_start),
                 LEAST(IFNULL(j.complete_date, p.month_end), p.month_end)
             ) / 3600 * j.ngpu
-        ) AS gpu_hours,
-        p.month_start,
-        p.month_end
+        ) AS gpu_hours
     FROM
         period p
     LEFT JOIN
@@ -30,60 +28,60 @@ job_data AS (
             'mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40', 'mlaas_infer', 'mlaas_hk_h100'
         )
     GROUP BY
-        j.queue_id, p.month_start, p.month_end
+        j.queue_id
 ),
 mlaas_ai AS (
     -- Combine `mlaas_infer` and `mlaas_hk_h100` into `mlaas_AI`.
     SELECT
         'mlaas_AI' AS queue_id,
-        SUM(gpu_hours) AS gpu_hours,
-        month_start,
-        month_end
+        SUM(gpu_hours) AS gpu_hours
     FROM
         job_data
     WHERE
         queue_id IN ('mlaas_infer', 'mlaas_hk_h100')
     GROUP BY
-        month_start, month_end
+        queue_id
 ),
 combined_data AS (
-    -- Combine all queue_ids including the aggregated `mlaas_AI`.
-    SELECT queue_id, gpu_hours, month_start, month_end FROM job_data
+    -- Combine all queue_ids including `mlaas_AI`.
+    SELECT queue_id, gpu_hours FROM job_data
     WHERE queue_id NOT IN ('mlaas_infer', 'mlaas_hk_h100')
     UNION ALL
-    SELECT queue_id, gpu_hours, month_start, month_end FROM mlaas_ai
+    SELECT queue_id, gpu_hours FROM mlaas_ai
 ),
 utilization AS (
     -- Calculate utilization for each queue_id.
     SELECT
-        cd.queue_id,
+        queue_id,
         ROUND(
-            (cd.gpu_hours / (40 * DATEDIFF(cd.month_end, cd.month_start) * 24)) * 100,
+            (gpu_hours / (40 * DATEDIFF(LAST_DAY(DATE_SUB(CURDATE(), INTERVAL 1 MONTH)), DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')) * 24)) * 100,
             2
-        ) AS utilization_percentage,
-        cd.month_start,
-        cd.month_end
+        ) AS utilization_percentage
     FROM
-        combined_data cd
+        combined_data
+),
+blended_utilization AS (
+    -- Calculate the blended utilization.
+    SELECT
+        'Blended Utilization' AS queue_id,
+        ROUND(
+            (
+                (1 * SUM(CASE WHEN queue_id = 'mlaas' THEN utilization_percentage END)) +
+                (2 * SUM(CASE WHEN queue_id = 'mlaas_a100' THEN utilization_percentage END)) +
+                (4 * SUM(CASE WHEN queue_id = 'mlaas_h100' THEN utilization_percentage END))
+            ) / 7,
+            2
+        ) AS utilization_percentage
+    FROM
+        utilization
 )
--- Add the blended utilization metric.
-SELECT
-    u.queue_id,
-    u.utilization_percentage,
-    u.month_start,
-    u.month_end,
-    ROUND(
-        (
-            (1 * SUM(CASE WHEN u.queue_id = 'mlaas' THEN u.utilization_percentage END)) +
-            (2 * SUM(CASE WHEN u.queue_id = 'mlaas_a100' THEN u.utilization_percentage END)) +
-            (4 * SUM(CASE WHEN u.queue_id = 'mlaas_h100' THEN u.utilization_percentage END))
-        ) / 7,
-        2
-    ) AS blended_utilization
-FROM
-    utilization u
-GROUP BY
-    u.month_start, u.month_end, u.queue_id;
+-- Combine utilization data with the blended utilization row.
+SELECT queue_id, utilization_percentage
+FROM utilization
+UNION ALL
+SELECT queue_id, utilization_percentage
+FROM blended_utilization;
+
 
 
 
