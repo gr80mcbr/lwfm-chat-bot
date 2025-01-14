@@ -7,7 +7,7 @@ WITH period AS (
 job_data AS (
     -- Aggregate GPU hours for all relevant queue_ids in the previous month.
     SELECT
-        j.queue_id COLLATE utf8mb4_general_ci AS queue_id, -- Standardize collation
+        j.queue_id,
         SUM(
             TIMESTAMPDIFF(
                 SECOND,
@@ -26,7 +26,7 @@ job_data AS (
         AND j.start_time != '0000-00-00 00:00:00'
         AND (j.complete_date >= p.month_start OR j.complete_date IS NULL)
     WHERE
-        j.queue_id COLLATE utf8mb4_general_ci IN (
+        j.queue_id IN (
             'mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40', 'mlaas_infer', 'mlaas_hk_h100'
         )
     GROUP BY
@@ -35,7 +35,7 @@ job_data AS (
 mlaas_ai AS (
     -- Combine `mlaas_infer` and `mlaas_hk_h100` into `mlaas_AI`.
     SELECT
-        'mlaas_AI' COLLATE utf8mb4_general_ci AS queue_id, -- Standardize collation
+        'mlaas_AI' AS queue_id,
         SUM(gpu_hours) AS gpu_hours,
         month_start,
         month_end
@@ -74,9 +74,9 @@ SELECT
     u.month_end,
     ROUND(
         (
-            (1 * COALESCE(SUM(CASE WHEN u.queue_id = 'mlaas' THEN u.utilization_percentage END), 0)) +
-            (2 * COALESCE(SUM(CASE WHEN u.queue_id = 'mlaas_a100' THEN u.utilization_percentage END), 0)) +
-            (4 * COALESCE(SUM(CASE WHEN u.queue_id = 'mlaas_h100' THEN u.utilization_percentage END), 0))
+            (1 * SUM(CASE WHEN u.queue_id = 'mlaas' THEN u.utilization_percentage END)) +
+            (2 * SUM(CASE WHEN u.queue_id = 'mlaas_a100' THEN u.utilization_percentage END)) +
+            (4 * SUM(CASE WHEN u.queue_id = 'mlaas_h100' THEN u.utilization_percentage END))
         ) / 7,
         2
     ) AS blended_utilization
@@ -84,6 +84,7 @@ FROM
     utilization u
 GROUP BY
     u.month_start, u.month_end, u.queue_id;
+
 
 
 
