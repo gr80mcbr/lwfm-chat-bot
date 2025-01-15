@@ -1,11 +1,11 @@
 WITH period AS (
-    -- Define the date range for December
+    -- Define the date range for the previous month
     SELECT
         DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH), '%Y-%m-15') AS month_start,
         LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) AS month_end
 ),
-job_data AS (
-    -- Calculate GPU hours for 'mlaas' queue in the December range
+gpu_hours_by_queue AS (
+    -- Calculate GPU hours for each queue_id in the defined date range
     SELECT
         j.queue_id,
         SUM(
@@ -24,26 +24,92 @@ job_data AS (
         AND j.start_time != '0000-00-00 00:00:00'
         AND (j.complete_date >= p.month_start OR j.complete_date IS NULL)
     WHERE
-        j.queue_id = 'mlaas' -- Filter for 'mlaas' queue
+        j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40', 'mlaas_infer', 'mlaas_hk_h100')
     GROUP BY
         j.queue_id
 ),
-utilization AS (
-    -- Calculate utilization percentage for the 'mlaas' queue
+utilization_by_queue AS (
+    -- Assign the correct GPU count for each queue and calculate utilization
     SELECT
         queue_id,
+        gpu_hours,
+        CASE
+            WHEN queue_id = 'mlaas' THEN 40
+            WHEN queue_id = 'mlaas_a100' THEN 20
+            WHEN queue_id = 'mlaas_h100' THEN 48
+            WHEN queue_id = 'mlaas_p40' THEN 5
+            WHEN queue_id IN ('mlaas_infer', 'mlaas_hk_h100') THEN 16
+            ELSE 0
+        END AS gpu_count,
         ROUND(
             (
-                gpu_hours / (40 * DATEDIFF(LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)), DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) * 24)
+                gpu_hours / (
+                    CASE
+                        WHEN queue_id = 'mlaas' THEN 40
+                        WHEN queue_id = 'mlaas_a100' THEN 20
+                        WHEN queue_id = 'mlaas_h100' THEN 48
+                        WHEN queue_id = 'mlaas_p40' THEN 5
+                        WHEN queue_id IN ('mlaas_infer', 'mlaas_hk_h100') THEN 16
+                        ELSE 0
+                    END
+                    * DATEDIFF(LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)), DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) * 24
+                )
             ) * 100,
             2
         ) AS utilization_percentage
     FROM
-        job_data
+        gpu_hours_by_queue
+),
+combined_mlaas_AI AS (
+    -- Combine GPU hours for mlaas_infer and mlaas_hk_h100 into a single 'mlaas_AI' row
+    SELECT
+        'mlaas_AI' AS queue_id,
+        SUM(gpu_hours) AS gpu_hours,
+        16 AS gpu_count, -- Fixed GPU count for mlaas_AI
+        ROUND(
+            (
+                SUM(gpu_hours) / (16 * DATEDIFF(LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)), DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) * 24)
+            ) * 100,
+            2
+        ) AS utilization_percentage
+    FROM
+        gpu_hours_by_queue
+    WHERE
+        queue_id IN ('mlaas_infer', 'mlaas_hk_h100')
+),
+final_utilization AS (
+    -- Combine all queue utilization values into a single result set
+    SELECT queue_id, utilization_percentage
+    FROM utilization_by_queue
+    WHERE queue_id NOT IN ('mlaas_infer', 'mlaas_hk_h100')
+
+    UNION ALL
+
+    SELECT queue_id, utilization_percentage
+    FROM combined_mlaas_AI
+),
+blended_utilization AS (
+    -- Calculate the blended utilization using the weighted formula
+    SELECT
+        'blended_utilization' AS queue_id,
+        ROUND(
+            (
+                (1 * (SELECT utilization_percentage FROM final_utilization WHERE queue_id = 'mlaas') +
+                 2 * (SELECT utilization_percentage FROM final_utilization WHERE queue_id = 'mlaas_a100') +
+                 4 * (SELECT utilization_percentage FROM final_utilization WHERE queue_id = 'mlaas_h100')
+                ) / 7
+            ),
+            2
+        ) AS utilization_percentage
 )
--- Final output
+-- Output the final table
 SELECT queue_id, utilization_percentage
-FROM utilization;
+FROM final_utilization
+
+UNION ALL
+
+SELECT queue_id, utilization_percentage
+FROM blended_utilization;
 
 
 
