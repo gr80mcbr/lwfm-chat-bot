@@ -1,27 +1,30 @@
 SELECT
-    -- Format the month start date into 'YYYY-MM' format for reporting.
+    -- Format the month start date into 'YYYY-MM' format for reporting (using the previous month).
     DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
 
     -- Include the queue ID for grouping and reporting purposes.
     j.queue_id,
 
-    -- Calculate the total GPU hours used by jobs in the given month.
+    -- Calculate the average pending hours for jobs in the previous month.
+    AVG(
+        TIMESTAMPDIFF(SECOND, j.submission_date, j.start_time) / 3600
+    ) AS pend_hours,
+
+    -- Calculate the total GPU hours used by jobs in the previous month.
     SUM(
         TIMESTAMPDIFF(
             SECOND,
-            -- Take the later of the job's start time or the period's start date.
             GREATEST(j.start_time, periods.month_start),
-            -- Take the earlier of the job's complete date (if exists) or the period's end date.
             LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
         ) / 3600 * j.ngpu -- Convert the time difference to hours and multiply by the number of GPUs used.
     ) AS gpu_hours
 FROM (
-    -- Generate the start and end dates for the previous month.
+    -- Generate a list of start and end dates for the previous month.
     SELECT
-        -- Calculate the 15th of the previous month as the approximate start date of the reporting period.
-        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH), '%Y-%m-15') AS month_start,
+        -- Get the 1st day of the previous month.
+        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH), '%Y-%m-01') AS month_start,
 
-        -- Calculate the last day of the previous month as the end date of the reporting period.
+        -- Get the last day of the previous month.
         LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) AS month_end
 ) periods
 -- Join the jobs table to the generated period ranges to aggregate GPU usage and pending hours.
@@ -36,41 +39,49 @@ ON
     -- Include jobs that are either completed or incomplete but overlap with the period.
     AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
 WHERE
-    -- Filter only jobs in the specified queue IDs.
+    -- Filter jobs to include only those in the specified queues.
     j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40')
 GROUP BY
     -- Group the results by the period's start and end dates and queue ID.
     periods.month_start, periods.month_end, j.queue_id
-ORDER BY
-    -- Order the results in descending order of the month (most recent months first).
-    periods.month_start DESC;
 
--- Calculate blended utilization as a separate step or view.
-WITH utilization_data AS (
+UNION ALL
+
+-- Blended utilization for weighted average calculation
+SELECT
+    -- Same month for the blended utilization row
+    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
+
+    -- A special label for blended utilization
+    'blended_utilization' AS queue_id,
+
+    -- No need to calculate pending hours for the blended utilization
+    NULL AS pend_hours,
+
+    -- Calculate the weighted average of GPU hours based on the provided formula
+    SUM(
+        CASE 
+            WHEN j.queue_id = 'mlaas' THEN 1 * (TIMESTAMPDIFF(SECOND, GREATEST(j.start_time, periods.month_start), LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)) / 3600 * j.ngpu)
+            WHEN j.queue_id = 'mlaas_a100' THEN 2 * (TIMESTAMPDIFF(SECOND, GREATEST(j.start_time, periods.month_start), LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)) / 3600 * j.ngpu)
+            WHEN j.queue_id = 'mlaas_h100' THEN 4 * (TIMESTAMPDIFF(SECOND, GREATEST(j.start_time, periods.month_start), LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)) / 3600 * j.ngpu)
+            ELSE 0
+        END
+    ) / 7 AS gpu_hours
+FROM (
+    -- Same period calculation as above.
     SELECT
-        j.queue_id,
-        SUM(
-            TIMESTAMPDIFF(
-                SECOND,
-                GREATEST(j.start_time, periods.month_start),
-                LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-            ) / 3600 * j.ngpu
-        ) AS gpu_hours
-    FROM (
-        SELECT
-            DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH), '%Y-%m-15') AS month_start,
-            LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) AS month_end
-    ) periods
-    LEFT JOIN job_hal_mlaas j
-    ON j.start_time < periods.month_end
+        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH), '%Y-%m-01') AS month_start,
+        LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) AS month_end
+) periods
+-- Join the jobs table as before for the blended utilization.
+LEFT JOIN job_hal_mlaas j
+ON 
+    j.start_time < periods.month_end
     AND j.start_time != '0000-00-00 00:00:00'
     AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
-    WHERE j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100')
-    GROUP BY j.queue_id
-)
-SELECT
-    'blended_utilization' AS metric_name,
-    (1 * COALESCE(SUM(CASE WHEN queue_id = 'mlaas' THEN gpu_hours END), 0) +
-     2 * COALESCE(SUM(CASE WHEN queue_id = 'mlaas_a100' THEN gpu_hours END), 0) +
-     4 * COALESCE(SUM(CASE WHEN queue_id = 'mlaas_h100' THEN gpu_hours END), 0)) / 7 AS blended_utilization
-FROM utilization_data;
+WHERE
+    j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40')
+GROUP BY
+    periods.month_start, periods.month_end
+ORDER BY
+    report_month DESC, queue_id;
