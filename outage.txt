@@ -5,19 +5,14 @@ SELECT
     -- Include the queue ID for grouping and reporting purposes.
     j.queue_id,
 
-    -- Calculate the average pending hours for jobs in the previous month.
-    AVG(
-        TIMESTAMPDIFF(SECOND, j.submission_date, j.start_time) / 3600
-    ) AS pend_hours,
-
-    -- Calculate the total GPU hours used by jobs in the previous month.
+    -- Calculate the total GPU hours used by jobs in the previous month (utilization).
     SUM(
         TIMESTAMPDIFF(
             SECOND,
             GREATEST(j.start_time, periods.month_start),
             LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
         ) / 3600 * j.ngpu -- Convert the time difference to hours and multiply by the number of GPUs used.
-    ) AS gpu_hours
+    ) AS utilization
 FROM (
     -- Generate a list of start and end dates for the previous month.
     SELECT
@@ -27,7 +22,7 @@ FROM (
         -- Get the last day of the previous month.
         LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -1 MONTH)) AS month_end
 ) periods
--- Join the jobs table to the generated period ranges to aggregate GPU usage and pending hours.
+-- Join the jobs table to the generated period ranges to aggregate GPU usage.
 LEFT JOIN job_hal_mlaas j
 ON 
     -- Ensure the job starts before the period's end date.
@@ -55,9 +50,6 @@ SELECT
     -- A special label for blended utilization
     'blended_utilization' AS queue_id,
 
-    -- No need to calculate pending hours for the blended utilization
-    NULL AS pend_hours,
-
     -- Calculate the weighted average of GPU hours based on the provided formula
     SUM(
         CASE 
@@ -66,7 +58,7 @@ SELECT
             WHEN j.queue_id = 'mlaas_h100' THEN 4 * (TIMESTAMPDIFF(SECOND, GREATEST(j.start_time, periods.month_start), LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)) / 3600 * j.ngpu)
             ELSE 0
         END
-    ) / 7 AS gpu_hours
+    ) / 7 AS utilization
 FROM (
     -- Same period calculation as above.
     SELECT
