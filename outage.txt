@@ -6,8 +6,8 @@ WITH month_period AS (
 ),
 queue_utilization AS (
     SELECT
-        -- Explicitly set collation for queue_id to ensure compatibility in UNION
-        j.queue_id COLLATE utf8mb4_0900_ai_ci AS queue_id,
+        -- Explicitly convert queue_id to ensure compatible character set and collation
+        CONVERT(j.queue_id USING utf8) COLLATE utf8_general_ci AS queue_id,
         -- Calculate the total GPU hours used in the previous month
         SUM(
             TIMESTAMPDIFF(
@@ -34,7 +34,8 @@ queue_utilization AS (
 ),
 blended_utilization AS (
     SELECT 
-        'blended' COLLATE utf8mb4_0900_ai_ci AS queue_id,
+        -- Explicitly set queue_id for blended calculation
+        CONVERT('blended' USING utf8) COLLATE utf8_general_ci AS queue_id,
         -- Calculate blended utilization using the provided formula
         ROUND(
             (1 * COALESCE(SUM(CASE WHEN queue_id = 'mlaas' THEN gpu_hours END), 0) +
