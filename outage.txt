@@ -1,3 +1,128 @@
+SELECT 
+    -- Format the month start date into 'YYYY-MM' format for reporting.
+    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
+
+    -- Include the queue ID for grouping and reporting purposes.
+    j.queue_id,
+
+    -- Calculate the average pending hours for jobs in the given month.
+    AVG(
+        TIMESTAMPDIFF(SECOND, j.submission_date, j.start_time) / 3600
+    ) AS pend_hours,
+
+    -- Calculate the total GPU hours used by jobs in the given month.
+    SUM(
+        TIMESTAMPDIFF(
+            SECOND,
+            -- Take the later of the job's start time or the period's start date.
+            GREATEST(j.start_time, periods.month_start),
+            -- Take the earlier of the job's complete date (if exists) or the period's end date.
+            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+        ) / 3600 * j.ngpu -- Convert the time difference to hours and multiply by the number of GPUs used.
+    ) AS gpu_hours,
+
+    -- Calculate the GPU utilization for the month.
+    -- Utilization = (Total GPU Hours Used / Total Available GPU Hours) * 100
+    ROUND(
+        (
+            SUM(
+                TIMESTAMPDIFF(
+                    SECOND,
+                    GREATEST(j.start_time, periods.month_start),
+                    LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                ) / 3600 * j.ngpu
+            ) / (
+                -- Total available hours in the month = GPU Count * Days in Month * Hours in a Day.
+                CASE 
+                    WHEN j.queue_id = 'mlaas' THEN 40
+                    WHEN j.queue_id = 'mlaas_a100' THEN 20
+                    WHEN j.queue_id = 'mlaas_h100' THEN 48
+                    ELSE 40  -- Default in case of other queue IDs (you can adjust this as needed).
+                END * DATEDIFF(periods.month_end, periods.month_start) * 24
+            )
+        ) * 100, 2
+    ) AS utilization_percentage,
+
+    -- Add blended utilization calculation (weighted average of the different queues)
+    ROUND(
+        (
+            (1 * MAX(CASE WHEN j.queue_id = 'mlaas' THEN (
+                SUM(
+                    TIMESTAMPDIFF(
+                        SECOND,
+                        GREATEST(j.start_time, periods.month_start),
+                        LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                    ) / 3600 * j.ngpu
+                ) / (
+                    CASE 
+                        WHEN j.queue_id = 'mlaas' THEN 40
+                        ELSE 40 
+                    END * DATEDIFF(periods.month_end, periods.month_start) * 24
+                )
+            ) ELSE 0 END)) +
+            (2 * MAX(CASE WHEN j.queue_id = 'mlaas_a100' THEN (
+                SUM(
+                    TIMESTAMPDIFF(
+                        SECOND,
+                        GREATEST(j.start_time, periods.month_start),
+                        LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                    ) / 3600 * j.ngpu
+                ) / (
+                    CASE 
+                        WHEN j.queue_id = 'mlaas_a100' THEN 20
+                        ELSE 40 
+                    END * DATEDIFF(periods.month_end, periods.month_start) * 24
+                )
+            ) ELSE 0 END)) +
+            (4 * MAX(CASE WHEN j.queue_id = 'mlaas_h100' THEN (
+                SUM(
+                    TIMESTAMPDIFF(
+                        SECOND,
+                        GREATEST(j.start_time, periods.month_start),
+                        LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                    ) / 3600 * j.ngpu
+                ) / (
+                    CASE 
+                        WHEN j.queue_id = 'mlaas_h100' THEN 48
+                        ELSE 40 
+                    END * DATEDIFF(periods.month_end, periods.month_start) * 24
+                )
+            ) ELSE 0 END))
+        ) / 7, 2
+    ) AS blended_utilization
+
+FROM (
+    -- Generate a list of start and end dates for the last 6 months.
+    SELECT
+        -- Generate the 15th of each month as the approximate start date of the reporting period.
+        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH), '%Y-%m-15') AS month_start,
+
+        -- Calculate the last day of the corresponding month as the end of the reporting period.
+        LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH)) AS month_end
+    FROM (
+        -- Create a simple list of numbers (0 to 5) to represent the last 6 months.
+        SELECT 1 AS num 
+    ) m
+) periods
+-- Join the jobs table to the generated period ranges to aggregate GPU usage and pending hours.
+LEFT JOIN job_hal_mlaas j
+ON 
+    -- Ensure the job starts before the period's end date.
+    j.start_time < periods.month_end
+
+    -- Exclude jobs with a '0000-00-00 00:00:00' start time (indicating the job hasn't started).
+    AND j.start_time != '0000-00-00 00:00:00'
+
+    -- Include jobs that are either completed or incomplete but overlap with the period.
+    AND
+
+
+
+
+
+
+
+
 SELECT
     -- Format the month start date into 'YYYY-MM' format for reporting.
     DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
