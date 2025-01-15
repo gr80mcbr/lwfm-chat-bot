@@ -23,7 +23,13 @@ FROM (
                         LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
                     ) / 3600 * j.ngpu
                 ) / (
-                    40 * DATEDIFF(periods.month_end, periods.month_start) * 24
+                    CASE
+                        WHEN j.queue_id = 'mlaas' THEN 40  -- 40 GPUs for 'mlaas'
+                        WHEN j.queue_id = 'mlaas_a100' THEN 20  -- 20 GPUs for 'mlaas_a100'
+                        WHEN j.queue_id = 'mlaas_h100' THEN 48  -- 48 GPUs for 'mlaas_h100'
+                        ELSE 1  -- Default multiplier if queue is not recognized
+                    END
+                    * DATEDIFF(periods.month_end, periods.month_start) * 24
                 )
             ) * 100, 2
         ) AS utilization_percentage
@@ -101,7 +107,13 @@ FROM (
                     END
                 ) / 7
             ) / (
-                40 * DATEDIFF(periods.month_end, periods.month_start) * 24
+                CASE
+                    WHEN j.queue_id = 'mlaas' THEN 40  -- 40 GPUs for 'mlaas'
+                    WHEN j.queue_id = 'mlaas_a100' THEN 20  -- 20 GPUs for 'mlaas_a100'
+                    WHEN j.queue_id = 'mlaas_h100' THEN 48  -- 48 GPUs for 'mlaas_h100'
+                    ELSE 1  -- Default multiplier if queue is not recognized
+                END
+                * DATEDIFF(periods.month_end, periods.month_start) * 24
             ) * 100, 2
         ) AS utilization_percentage
     FROM (
