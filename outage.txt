@@ -6,36 +6,36 @@ WITH month_period AS (
 ),
 queue_utilization AS (
     SELECT
-        -- Include queue_id for grouping.
-        j.queue_id,
-        -- Calculate the total GPU hours used in the previous month.
+        -- Explicitly set collation for queue_id to ensure compatibility in UNION
+        j.queue_id COLLATE utf8mb4_0900_ai_ci AS queue_id,
+        -- Calculate the total GPU hours used in the previous month
         SUM(
             TIMESTAMPDIFF(
                 SECOND,
                 GREATEST(j.start_time, month_period.month_start),
                 LEAST(IFNULL(j.complete_date, month_period.month_end), month_period.month_end)
-            ) / 3600 * j.ngpu -- Convert time difference to hours and multiply by number of GPUs.
+            ) / 3600 * j.ngpu -- Convert time difference to hours and multiply by number of GPUs
         ) AS gpu_hours,
-        -- Calculate the total available GPU hours for the queue.
+        -- Calculate the total available GPU hours for the queue
         (
-            40 -- Assume 40 GPUs for each queue.
-            * DATEDIFF(month_period.month_end, month_period.month_start) * 24 -- Total hours in the month.
+            40 -- Assume 40 GPUs for each queue
+            * DATEDIFF(month_period.month_end, month_period.month_start) * 24 -- Total hours in the month
         ) AS total_available_hours
     FROM 
         month_period
     LEFT JOIN job_hal_mlaas j
-        ON j.start_time < month_period.month_end -- Ensure job starts before the period ends.
-        AND j.start_time != '0000-00-00 00:00:00' -- Exclude jobs without valid start times.
-        AND (j.complete_date >= month_period.month_start OR j.complete_date IS NULL) -- Include incomplete jobs spanning the month.
+        ON j.start_time < month_period.month_end -- Ensure job starts before the period ends
+        AND j.start_time != '0000-00-00 00:00:00' -- Exclude jobs without valid start times
+        AND (j.complete_date >= month_period.month_start OR j.complete_date IS NULL) -- Include incomplete jobs spanning the month
     WHERE 
-        j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40') -- Filter specific queue_ids.
+        j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100', 'mlaas_p40') -- Filter specific queue_ids
     GROUP BY 
         j.queue_id
 ),
 blended_utilization AS (
     SELECT 
-        'blended' AS queue_id,
-        -- Calculate blended utilization using the provided formula.
+        'blended' COLLATE utf8mb4_0900_ai_ci AS queue_id,
+        -- Calculate blended utilization using the provided formula
         ROUND(
             (1 * COALESCE(SUM(CASE WHEN queue_id = 'mlaas' THEN gpu_hours END), 0) +
              2 * COALESCE(SUM(CASE WHEN queue_id = 'mlaas_a100' THEN gpu_hours END), 0) +
@@ -44,7 +44,7 @@ blended_utilization AS (
         ) AS utilization_percentage
     FROM queue_utilization
 )
--- Combine results from both individual queue utilization and the blended utilization.
+-- Combine results from both individual queue utilization and the blended utilization
 SELECT 
     queue_id,
     ROUND(gpu_hours / total_available_hours * 100, 2) AS utilization_percentage
