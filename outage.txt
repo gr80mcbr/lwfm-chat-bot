@@ -69,6 +69,10 @@ ON
 WHERE
     -- Filter only jobs in the relevant queues.
     j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100')
+
+    -- Filter only for the previous month (compared to the current month).
+    AND periods.month_start = DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 1 MONTH), '%Y-%m-15')
+
 GROUP BY
     -- Group the results by the period's start and end dates and queue ID.
     periods.month_start, periods.month_end, j.queue_id
