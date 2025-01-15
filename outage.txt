@@ -76,6 +76,94 @@ WHERE
 GROUP BY
     -- Group the results by the period's start and end dates and queue ID.
     periods.month_start, periods.month_end, j.queue_id
+
+UNION ALL
+
+-- Blended utilization row:
+SELECT
+    -- Set the report month to the same as the previous query.
+    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
+
+    -- Set the queue_id as 'blended' to indicate it's the blended utilization.
+    'blended' AS queue_id,
+
+    -- Set the pending hours to NULL for the blended row (no pending hours for blended utilization).
+    NULL AS pend_hours,
+
+    -- Set the GPU hours to the weighted sum of the GPU hours for each queue.
+    SUM(
+        CASE 
+            WHEN j.queue_id = 'mlaas' THEN 
+                TIMESTAMPDIFF(SECOND, 
+                    GREATEST(j.start_time, periods.month_start),
+                    LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                ) / 3600 * j.ngpu * 1
+            WHEN j.queue_id = 'mlaas_a100' THEN 
+                TIMESTAMPDIFF(SECOND, 
+                    GREATEST(j.start_time, periods.month_start),
+                    LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                ) / 3600 * j.ngpu * 2
+            WHEN j.queue_id = 'mlaas_h100' THEN 
+                TIMESTAMPDIFF(SECOND, 
+                    GREATEST(j.start_time, periods.month_start),
+                    LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                ) / 3600 * j.ngpu * 4
+            ELSE 0
+        END
+    ) / 7 AS gpu_hours,
+
+    -- Calculate the blended utilization as the weighted sum divided by total available GPU hours.
+    ROUND(
+        (
+            SUM(
+                CASE 
+                    WHEN j.queue_id = 'mlaas' THEN 
+                        TIMESTAMPDIFF(SECOND, 
+                            GREATEST(j.start_time, periods.month_start),
+                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                        ) / 3600 * j.ngpu * 1
+                    WHEN j.queue_id = 'mlaas_a100' THEN 
+                        TIMESTAMPDIFF(SECOND, 
+                            GREATEST(j.start_time, periods.month_start),
+                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                        ) / 3600 * j.ngpu * 2
+                    WHEN j.queue_id = 'mlaas_h100' THEN 
+                        TIMESTAMPDIFF(SECOND, 
+                            GREATEST(j.start_time, periods.month_start),
+                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                        ) / 3600 * j.ngpu * 4
+                    ELSE 0
+                END
+            ) / 7
+        ) / (
+            -- Total available hours in the month = GPU Count * Days in Month * Hours in a Day.
+            40 * DATEDIFF(periods.month_end, periods.month_start) * 24
+        ) * 100, 2
+    ) AS utilization_percentage
+FROM (
+    -- Generate a list of start and end dates for the last 6 months.
+    SELECT
+        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH), '%Y-%m-15') AS month_start,
+        LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH)) AS month_end
+    FROM (
+        SELECT 0 AS num
+        UNION ALL SELECT 1
+        UNION ALL SELECT 2
+        UNION ALL SELECT 3
+        UNION ALL SELECT 4
+        UNION ALL SELECT 5
+    ) m
+) periods
+LEFT JOIN job_hal_mlaas j
+ON 
+    j.start_time < periods.month_end
+    AND j.start_time != '0000-00-00 00:00:00'
+    AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
+WHERE
+    j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100')
+    AND periods.month_start = DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 1 MONTH), '%Y-%m-15')
+GROUP BY
+    periods.month_start, periods.month_end
+
 ORDER BY
-    -- Order the results in descending order of the month (most recent months first).
     periods.month_start DESC;
