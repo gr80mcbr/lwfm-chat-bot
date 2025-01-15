@@ -106,6 +106,7 @@ FROM blended_utilization;
 
 
 
+
 SELECT
     -- Format the month start date into 'YYYY-MM' format for reporting.
     DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
