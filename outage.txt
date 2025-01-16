@@ -17,7 +17,11 @@ SELECT
                 ) / 3600 * j.ngpu
             ) / (
                 -- Total available hours in the month = GPU Count * Days in Month * Hours in a Day.
-                40 * DATEDIFF(periods.month_end, periods.month_start) * 24
+                CASE
+                    WHEN j.queue_id = 'mlaas' THEN 40
+                    WHEN j.queue_id = 'mlaas_a100' THEN 20
+                    WHEN j.queue_id = 'mlaas_h100' THEN 48
+                END * DATEDIFF(periods.month_end, periods.month_start) * 24
             )
         ) * 100, 2
     ) AS utilization_percentage
