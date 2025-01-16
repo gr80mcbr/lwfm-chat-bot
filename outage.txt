@@ -6,7 +6,6 @@ SELECT
     j.queue_id,
 
     -- Calculate the GPU utilization for the month.
-    -- Utilization = (Total GPU Hours Used / Total Available GPU Hours) * 100
     ROUND(
         (
             SUM(
@@ -29,53 +28,36 @@ SELECT
     -- Calculate the weighted average of the utilizations for 'mlaas', 'mlaas_a100', and 'mlaas_h100'.
     ROUND(
         (
-            SUM(
-                CASE
+            (SUM(CASE
                     WHEN j.queue_id = 'mlaas' THEN
-                        (SUM(
-                            TIMESTAMPDIFF(
-                                SECOND,
-                                GREATEST(j.start_time, periods.month_start),
-                                LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-                            ) / 3600 * j.ngpu
-                        ) / (
-                            CASE
-                                WHEN j.queue_id = 'mlaas' THEN 40
-                                WHEN j.queue_id = 'mlaas_a100' THEN 20
-                                WHEN j.queue_id = 'mlaas_h100' THEN 48
-                            END * DATEDIFF(periods.month_end, periods.month_start) * 24
-                        )) * 1
+                        TIMESTAMPDIFF(
+                            SECOND,
+                            GREATEST(j.start_time, periods.month_start),
+                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                        ) / 3600 * j.ngpu
+                    ELSE 0
+                END) * 1) +
+            (SUM(CASE
                     WHEN j.queue_id = 'mlaas_a100' THEN
-                        (SUM(
-                            TIMESTAMPDIFF(
-                                SECOND,
-                                GREATEST(j.start_time, periods.month_start),
-                                LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-                            ) / 3600 * j.ngpu
-                        ) / (
-                            CASE
-                                WHEN j.queue_id = 'mlaas' THEN 40
-                                WHEN j.queue_id = 'mlaas_a100' THEN 20
-                                WHEN j.queue_id = 'mlaas_h100' THEN 48
-                            END * DATEDIFF(periods.month_end, periods.month_start) * 24
-                        )) * 2
+                        TIMESTAMPDIFF(
+                            SECOND,
+                            GREATEST(j.start_time, periods.month_start),
+                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                        ) / 3600 * j.ngpu
+                    ELSE 0
+                END) * 2) +
+            (SUM(CASE
                     WHEN j.queue_id = 'mlaas_h100' THEN
-                        (SUM(
-                            TIMESTAMPDIFF(
-                                SECOND,
-                                GREATEST(j.start_time, periods.month_start),
-                                LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-                            ) / 3600 * j.ngpu
-                        ) / (
-                            CASE
-                                WHEN j.queue_id = 'mlaas' THEN 40
-                                WHEN j.queue_id = 'mlaas_a100' THEN 20
-                                WHEN j.queue_id = 'mlaas_h100' THEN 48
-                            END * DATEDIFF(periods.month_end, periods.month_start) * 24
-                        )) * 4
-                END
-            )
-        ) / 7, 2
+                        TIMESTAMPDIFF(
+                            SECOND,
+                            GREATEST(j.start_time, periods.month_start),
+                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                        ) / 3600 * j.ngpu
+                    ELSE 0
+                END) * 4)
+        ) / (
+            7 * DATEDIFF(periods.month_end, periods.month_start) * 24
+        ), 2
     ) AS weighted_utilization_percentage
 FROM (
     -- Generate a list of start and end dates for the last 6 months.
