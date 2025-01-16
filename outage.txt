@@ -31,4 +31,9 @@ WHERE
     j.start_time < LAST_DAY(NOW()) AND
     j.start_time != '0000-00-00 00:00:00' AND
     -- Ensure jobs that end after the month or are incomplete are included.
-    (j.complete_date >=
+    (j.complete_date >= DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH) OR j.complete_date IS NULL) AND
+    -- Filter only jobs in the 'mlaas', 'mlaas_a100', and 'mlaas_h100' queues.
+    j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100')
+GROUP BY
+    -- Group the results by the queue ID.
+    j.queue_id
