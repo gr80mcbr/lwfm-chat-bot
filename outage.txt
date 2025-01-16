@@ -51,7 +51,7 @@ ON
     AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
 WHERE
     -- Filter only jobs in the 'mlaas' queue.
-    j.queue_id = 'mlaas'
+    j.queue_id = 'mlaas' or j.queue_id = 'mlaas_a100' or j.queue_id = 'mlaas_h100' 
 GROUP BY
     -- Group the results by the period's start and end dates and queue ID.
     periods.month_start, periods.month_end, j.queue_id
