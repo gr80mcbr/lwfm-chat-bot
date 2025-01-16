@@ -1,5 +1,46 @@
 SELECT
     -- Format the month start date into 'YYYY-MM' format for reporting.
+    DATE_FORMAT(DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH), '%Y-%m') AS report_month,
+
+    -- Include the queue ID for grouping and reporting purposes.
+    j.queue_id,
+
+    -- Calculate the GPU utilization for the previous month.
+    ROUND(
+        (
+            SUM(
+                TIMESTAMPDIFF(
+                    SECOND,
+                    GREATEST(j.start_time, DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH)),
+                    LEAST(IFNULL(j.complete_date, LAST_DAY(NOW())), LAST_DAY(NOW()))
+                ) / 3600 * j.ngpu
+            ) / (
+                -- Total available hours in the month = GPU Count * Days in Month * Hours in a Day.
+                CASE
+                    WHEN j.queue_id = 'mlaas' THEN 40
+                    WHEN j.queue_id = 'mlaas_a100' THEN 20
+                    WHEN j.queue_id = 'mlaas_h100' THEN 48
+                END * DATEDIFF(LAST_DAY(NOW()), DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH)) * 24
+            )
+        ) * 100, 2
+    ) AS utilization_percentage
+FROM job_hal_mlaas j
+-- Filter jobs that were active in the previous month.
+WHERE
+    j.start_time < LAST_DAY(NOW()) AND
+    j.start_time != '0000-00-00 00:00:00' AND
+    (j.complete_date >= DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH) OR j.complete_date IS NULL) AND
+    -- Filter only jobs in the 'mlaas', 'mlaas_a100', and 'mlaas_h100' queues.
+    j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100')
+GROUP BY
+    -- Group the results by the queue ID.
+    j.queue_id
+
+
+
+
+SELECT
+    -- Format the month start date into 'YYYY-MM' format for reporting.
     DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
 
     -- Include the queue ID for grouping and reporting purposes.
