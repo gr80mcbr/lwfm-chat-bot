@@ -1,18 +1,19 @@
 SELECT
     -- Format the month start date into 'YYYY-MM' format for reporting.
-    DATE_FORMAT(DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH), '%Y-%m') AS report_month,
+    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
 
     -- Include the queue ID for grouping and reporting purposes.
     j.queue_id,
 
-    -- Calculate the GPU utilization for the previous month.
+    -- Calculate the GPU utilization for the month.
+    -- Utilization = (Total GPU Hours Used / Total Available GPU Hours) * 100
     ROUND(
         (
             SUM(
                 TIMESTAMPDIFF(
                     SECOND,
-                    GREATEST(j.start_time, DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH)),
-                    LEAST(IFNULL(j.complete_date, LAST_DAY(NOW())), LAST_DAY(NOW()))
+                    GREATEST(j.start_time, periods.month_start),
+                    LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
                 ) / 3600 * j.ngpu
             ) / (
                 -- Total available hours in the month = GPU Count * Days in Month * Hours in a Day.
@@ -20,20 +21,89 @@ SELECT
                     WHEN j.queue_id = 'mlaas' THEN 40
                     WHEN j.queue_id = 'mlaas_a100' THEN 20
                     WHEN j.queue_id = 'mlaas_h100' THEN 48
-                END * DATEDIFF(LAST_DAY(NOW()), DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH)) * 24
+                END * DATEDIFF(periods.month_end, periods.month_start) * 24
             )
         ) * 100, 2
-    ) AS utilization_percentage
-FROM job_hal_mlaas j
--- Filter jobs that are active during the previous month
+    ) AS utilization_percentage,
+
+    -- Calculate the weighted average of the utilizations for 'mlaas', 'mlaas_a100', and 'mlaas_h100'.
+    ROUND(
+        (
+            SUM(
+                CASE
+                    WHEN j.queue_id = 'mlaas' THEN
+                        (SUM(
+                            TIMESTAMPDIFF(
+                                SECOND,
+                                GREATEST(j.start_time, periods.month_start),
+                                LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                            ) / 3600 * j.ngpu
+                        ) / (
+                            CASE
+                                WHEN j.queue_id = 'mlaas' THEN 40
+                                WHEN j.queue_id = 'mlaas_a100' THEN 20
+                                WHEN j.queue_id = 'mlaas_h100' THEN 48
+                            END * DATEDIFF(periods.month_end, periods.month_start) * 24
+                        )) * 1
+                    WHEN j.queue_id = 'mlaas_a100' THEN
+                        (SUM(
+                            TIMESTAMPDIFF(
+                                SECOND,
+                                GREATEST(j.start_time, periods.month_start),
+                                LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                            ) / 3600 * j.ngpu
+                        ) / (
+                            CASE
+                                WHEN j.queue_id = 'mlaas' THEN 40
+                                WHEN j.queue_id = 'mlaas_a100' THEN 20
+                                WHEN j.queue_id = 'mlaas_h100' THEN 48
+                            END * DATEDIFF(periods.month_end, periods.month_start) * 24
+                        )) * 2
+                    WHEN j.queue_id = 'mlaas_h100' THEN
+                        (SUM(
+                            TIMESTAMPDIFF(
+                                SECOND,
+                                GREATEST(j.start_time, periods.month_start),
+                                LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
+                            ) / 3600 * j.ngpu
+                        ) / (
+                            CASE
+                                WHEN j.queue_id = 'mlaas' THEN 40
+                                WHEN j.queue_id = 'mlaas_a100' THEN 20
+                                WHEN j.queue_id = 'mlaas_h100' THEN 48
+                            END * DATEDIFF(periods.month_end, periods.month_start) * 24
+                        )) * 4
+                END
+            )
+        ) / 7, 2
+    ) AS weighted_utilization_percentage
+FROM (
+    -- Generate a list of start and end dates for the last 6 months.
+    SELECT
+        -- Generate the 15th of each month as the approximate start date of the reporting period.
+        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH), '%Y-%m-15') AS month_start,
+
+        -- Calculate the last day of the corresponding month as the end of the reporting period.
+        LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH)) AS month_end
+    FROM (
+        -- Create a simple list of numbers (0 to 5) to represent the last 6 months.
+        SELECT 1 AS num
+    ) m
+) periods
+-- Join the jobs table to the generated period ranges to aggregate GPU usage and pending hours.
+LEFT JOIN job_hal_mlaas j
+ON 
+    -- Ensure the job starts before the period's end date.
+    j.start_time < periods.month_end
+
+    -- Exclude jobs with a '0000-00-00 00:00:00' start time (indicating the job hasn't started).
+    AND j.start_time != '0000-00-00 00:00:00'
+
+    -- Include jobs that are either completed or incomplete but overlap with the period.
+    AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
 WHERE
-    -- Ensure jobs that start before the month but overlap with it are included.
-    j.start_time < LAST_DAY(NOW()) AND
-    j.start_time != '0000-00-00 00:00:00' AND
-    -- Ensure jobs that end after the month or are incomplete are included.
-    (j.complete_date >= DATE_SUB(LAST_DAY(NOW()), INTERVAL 1 MONTH) OR j.complete_date IS NULL) AND
-    -- Filter only jobs in the 'mlaas', 'mlaas_a100', and 'mlaas_h100' queues.
-    j.queue_id IN ('mlaas', 'mlaas_a100', 'mlaas_h100')
+    -- Filter only jobs in the 'mlaas', 'mlaas_a100', or 'mlaas_h100' queues.
+    j.queue_id = 'mlaas' or j.queue_id = 'mlaas_a100' or j.queue_id = 'mlaas_h100' 
 GROUP BY
-    -- Group the results by the queue ID.
-    j.queue_id
+    -- Group the results by the period's start and end dates and queue ID.
+    periods.month_start, periods.month_end, j.queue_id
