@@ -1,3 +1,16 @@
+curl -X POST http://localhost:5000/outages \
+     -H "Content-Type: application/json" \
+     -d '{
+       "date": "2025-01-01",
+       "outageType": "Network",
+       "start": "09:00:00",
+       "end": "10:00:00",
+       "duration": "1 hour",
+       "comment": "Scheduled maintenance",
+       "engineer": "Alice"
+     }'
+
+
 <template>
   <div class="form-container">
     <h2 class="text-xl font-bold mb-4">Add Outage</h2>
