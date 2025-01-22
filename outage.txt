@@ -1,182 +1,160 @@
-# app.py
+<template>
+  <div class="form-container">
+    <h2 class="text-xl font-bold mb-4">Add Outage</h2>
+    <form @submit.prevent="handleSubmit">
+      <div class="form-group">
+        <label for="date">Date</label>
+        <input
+          id="date"
+          v-model="form.date"
+          type="date"
+          class="form-control"
+        />
+      </div>
 
-from flask import Flask, request, jsonify
-import mysql.connector
-from mysql.connector import Error
-from flask_cors import CORS
+      <div class="form-group">
+        <label for="outageType">Outage Type</label>
+        <input
+          id="outageType"
+          v-model="form.outageType"
+          type="text"
+          class="form-control"
+        />
+      </div>
 
-# Optional: load env variables from .env
-# from dotenv import load_dotenv
-# import os
-# load_dotenv()  # take environment variables from .env
+      <div class="form-group">
+        <label for="start">Start</label>
+        <input
+          id="start"
+          v-model="form.start"
+          type="time"
+          class="form-control"
+        />
+      </div>
 
-app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests from Vue
+      <div class="form-group">
+        <label for="end">End</label>
+        <input
+          id="end"
+          v-model="form.end"
+          type="time"
+          class="form-control"
+        />
+      </div>
 
-# You can store these in environment variables or a config file
-DB_HOST = "localhost"
-DB_USER = "root"
-DB_PASSWORD = "your_password"
-DB_NAME = "outage_tracker"
-DB_PORT = 3306
+      <div class="form-group">
+        <label for="duration">Duration</label>
+        <input
+          id="duration"
+          v-model="form.duration"
+          type="text"
+          class="form-control"
+        />
+      </div>
 
-def get_connection():
-    """Create and return a new MySQL database connection."""
-    return mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME,
-        port=DB_PORT
-    )
+      <div class="form-group">
+        <label for="comment">Comment</label>
+        <textarea
+          id="comment"
+          v-model="form.comment"
+          class="form-control"
+        ></textarea>
+      </div>
 
-@app.route("/")
-def home():
-    return "Outage Tracker Flask API is running!"
+      <div class="form-group">
+        <label for="engineer">Engineer</label>
+        <input
+          id="engineer"
+          v-model="form.engineer"
+          type="text"
+          class="form-control"
+        />
+      </div>
 
-@app.route("/init", methods=["GET"])
-def init_db():
-    """Create the 'outages' table if it doesn't exist."""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS outages (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                date DATE NOT NULL,
-                outageType VARCHAR(255) NOT NULL,
-                start TIME NOT NULL,
-                end TIME NOT NULL,
-                duration VARCHAR(100),
-                comment TEXT,
-                engineer VARCHAR(255)
-            )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        return jsonify({"message": 'Table "outages" created or already exists'})
-    except Error as e:
-        return jsonify({"error": str(e)}), 500
+      <div class="button-group">
+        <button type="submit" class="submit-button">Submit</button>
+      </div>
+    </form>
 
-# -------------------------------------------------------------------
-# CRUD Endpoints
-# -------------------------------------------------------------------
+    <!-- Optional: show success/error messages -->
+    <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
+    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+  </div>
+</template>
 
-@app.route("/outages", methods=["GET"])
-def get_outages():
-    """Retrieve all outages from the database."""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM outages")
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return jsonify(rows)  # returns a list of dict
-    except Error as e:
-        return jsonify({"error": str(e)}), 500
+<script>
+export default {
+  name: "OutageForm",
+  data() {
+    return {
+      form: {
+        date: "",
+        outageType: "",
+        start: "",
+        end: "",
+        duration: "",
+        comment: "",
+        engineer: "",
+      },
+      successMessage: "",
+      errorMessage: "",
+    };
+  },
+  methods: {
+    async handleSubmit() {
+      this.successMessage = "";
+      this.errorMessage = "";
 
-@app.route("/outages", methods=["POST"])
-def create_outage():
-    """
-    Create a new outage record.
-    Expects JSON in body: 
-      {
-        "date": "YYYY-MM-DD",
-        "outageType": "string",
-        "start": "HH:MM:SS",
-        "end": "HH:MM:SS",
-        "duration": "string",
-        "comment": "string",
-        "engineer": "string"
+      try {
+        // Adjust URL if your backend is at a different address/port
+        const response = await fetch("http://localhost:5000/outages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(this.form),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to create outage");
+        }
+
+        const result = await response.json();
+        this.successMessage = `Outage (ID: ${result.id}) created successfully!`;
+
+        // Clear the form
+        this.form = {
+          date: "",
+          outageType: "",
+          start: "",
+          end: "",
+          duration: "",
+          comment: "",
+          engineer: "",
+        };
+      } catch (error) {
+        console.error("Error creating outage:", error);
+        this.errorMessage = error.message;
       }
-    """
-    data = request.json
-    if not data:
-        return jsonify({"error": "No input data provided"}), 400
-    
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        sql = """INSERT INTO outages (date, outageType, start, end, duration, comment, engineer)
-                 VALUES (%s, %s, %s, %s, %s, %s, %s)"""
-        val = (
-            data.get("date"),
-            data.get("outageType"),
-            data.get("start"),
-            data.get("end"),
-            data.get("duration"),
-            data.get("comment"),
-            data.get("engineer")
-        )
-        cursor.execute(sql, val)
-        conn.commit()
-        new_id = cursor.lastrowid
-        cursor.close()
-        conn.close()
-        
-        return jsonify({"id": new_id, **data}), 201
-    except Error as e:
-        return jsonify({"error": str(e)}), 500
+    },
+  },
+};
+</script>
 
-@app.route("/outages/<int:outage_id>", methods=["PUT"])
-def update_outage(outage_id):
-    """
-    Update an existing outage record by ID.
-    Expects JSON in body (same fields as POST).
-    """
-    data = request.json
-    if not data:
-        return jsonify({"error": "No input data provided"}), 400
-    
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        sql = """UPDATE outages
-                 SET date=%s, outageType=%s, start=%s, end=%s, duration=%s, comment=%s, engineer=%s
-                 WHERE id=%s"""
-        val = (
-            data.get("date"),
-            data.get("outageType"),
-            data.get("start"),
-            data.get("end"),
-            data.get("duration"),
-            data.get("comment"),
-            data.get("engineer"),
-            outage_id
-        )
-        cursor.execute(sql, val)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        if cursor.rowcount == 0:
-            return jsonify({"error": f"No outage found with id {outage_id}"}), 404
-        return jsonify({"message": f"Outage {outage_id} updated"})
-    except Error as e:
-        return jsonify({"error": str(e)}), 500
+<style scoped>
+/* Optional: some quick styles if needed */
+.success-message {
+  color: #38a169; /* green */
+  margin-top: 1rem;
+}
+.error-message {
+  color: #e53e3e; /* red */
+  margin-top: 1rem;
+}
+</style>
 
-@app.route("/outages/<int:outage_id>", methods=["DELETE"])
-def delete_outage(outage_id):
-    """Delete an outage by ID."""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM outages WHERE id=%s", (outage_id,))
-        conn.commit()
-        cursor.close()
-        conn.close()
-        if cursor.rowcount == 0:
-            return jsonify({"error": f"No outage found with id {outage_id}"}), 404
-        return jsonify({"message": f"Outage {outage_id} deleted"})
-    except Error as e:
-        return jsonify({"error": str(e)}), 500
 
-# -------------------------------------------------------------------
-# Run Flask App
-# -------------------------------------------------------------------
-if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+
+
 
 
 
