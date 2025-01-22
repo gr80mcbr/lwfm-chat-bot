@@ -1,3 +1,98 @@
+<template>
+  <div class="form-container">
+    <h2 class="text-xl font-bold mb-4">Add Outage</h2>
+    <form @submit.prevent="handleSubmit">
+      <div class="form-group">
+        <label for="date">Date</label>
+        <input v-model="form.date" id="date" type="date" class="form-control" />
+      </div>
+
+      <div class="form-group">
+        <label for="outageType">Outage Type</label>
+        <input v-model="form.outageType" id="outageType" type="text" class="form-control" />
+      </div>
+
+      <div class="form-group">
+        <label for="start">Start</label>
+        <input v-model="form.start" id="start" type="time" class="form-control" />
+      </div>
+
+      <div class="form-group">
+        <label for="end">End</label>
+        <input v-model="form.end" id="end" type="time" class="form-control" />
+      </div>
+
+      <div class="form-group">
+        <label for="duration">Duration</label>
+        <input v-model="form.duration" id="duration" type="text" class="form-control" />
+      </div>
+
+      <div class="form-group">
+        <label for="comment">Comment</label>
+        <textarea v-model="form.comment" id="comment" class="form-control"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="engineer">Engineer</label>
+        <input v-model="form.engineer" id="engineer" type="text" class="form-control" />
+      </div>
+
+      <!-- Button group (optional, if you want multiple action buttons) -->
+      <div class="button-group">
+        <button type="submit" class="submit-button">Submit</button>
+      </div>
+    </form>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      form: {
+        date: "",
+        outageType: "",
+        start: "",
+        end: "",
+        duration: "",
+        comment: "",
+        engineer: "",
+      },
+    };
+  },
+  methods: {
+    handleSubmit() {
+      this.$emit("submit", { ...this.form });
+      this.resetForm();
+    },
+    resetForm() {
+      this.form = {
+        date: "",
+        outageType: "",
+        start: "",
+        end: "",
+        duration: "",
+        comment: "",
+        engineer: "",
+      };
+    },
+  },
+};
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* FORM LAYOUT & STYLING */
 
 /* A container for the form so it's nicely centered on the page. */
