@@ -1,84 +1,182 @@
-<template>
-  <div class="form-container">
-    <h2 class="text-xl font-bold mb-4">Add Outage</h2>
-    <form @submit.prevent="handleSubmit">
-      <div class="form-group">
-        <label for="date">Date</label>
-        <input v-model="form.date" id="date" type="date" class="form-control" />
-      </div>
+# app.py
 
-      <div class="form-group">
-        <label for="outageType">Outage Type</label>
-        <input v-model="form.outageType" id="outageType" type="text" class="form-control" />
-      </div>
+from flask import Flask, request, jsonify
+import mysql.connector
+from mysql.connector import Error
+from flask_cors import CORS
 
-      <div class="form-group">
-        <label for="start">Start</label>
-        <input v-model="form.start" id="start" type="time" class="form-control" />
-      </div>
+# Optional: load env variables from .env
+# from dotenv import load_dotenv
+# import os
+# load_dotenv()  # take environment variables from .env
 
-      <div class="form-group">
-        <label for="end">End</label>
-        <input v-model="form.end" id="end" type="time" class="form-control" />
-      </div>
+app = Flask(__name__)
+CORS(app)  # Allow cross-origin requests from Vue
 
-      <div class="form-group">
-        <label for="duration">Duration</label>
-        <input v-model="form.duration" id="duration" type="text" class="form-control" />
-      </div>
+# You can store these in environment variables or a config file
+DB_HOST = "localhost"
+DB_USER = "root"
+DB_PASSWORD = "your_password"
+DB_NAME = "outage_tracker"
+DB_PORT = 3306
 
-      <div class="form-group">
-        <label for="comment">Comment</label>
-        <textarea v-model="form.comment" id="comment" class="form-control"></textarea>
-      </div>
+def get_connection():
+    """Create and return a new MySQL database connection."""
+    return mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+        port=DB_PORT
+    )
 
-      <div class="form-group">
-        <label for="engineer">Engineer</label>
-        <input v-model="form.engineer" id="engineer" type="text" class="form-control" />
-      </div>
+@app.route("/")
+def home():
+    return "Outage Tracker Flask API is running!"
 
-      <!-- Button group (optional, if you want multiple action buttons) -->
-      <div class="button-group">
-        <button type="submit" class="submit-button">Submit</button>
-      </div>
-    </form>
-  </div>
-</template>
+@app.route("/init", methods=["GET"])
+def init_db():
+    """Create the 'outages' table if it doesn't exist."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS outages (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                date DATE NOT NULL,
+                outageType VARCHAR(255) NOT NULL,
+                start TIME NOT NULL,
+                end TIME NOT NULL,
+                duration VARCHAR(100),
+                comment TEXT,
+                engineer VARCHAR(255)
+            )
+        """)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({"message": 'Table "outages" created or already exists'})
+    except Error as e:
+        return jsonify({"error": str(e)}), 500
 
-<script>
-export default {
-  data() {
-    return {
-      form: {
-        date: "",
-        outageType: "",
-        start: "",
-        end: "",
-        duration: "",
-        comment: "",
-        engineer: "",
-      },
-    };
-  },
-  methods: {
-    handleSubmit() {
-      this.$emit("submit", { ...this.form });
-      this.resetForm();
-    },
-    resetForm() {
-      this.form = {
-        date: "",
-        outageType: "",
-        start: "",
-        end: "",
-        duration: "",
-        comment: "",
-        engineer: "",
-      };
-    },
-  },
-};
-</script>
+# -------------------------------------------------------------------
+# CRUD Endpoints
+# -------------------------------------------------------------------
+
+@app.route("/outages", methods=["GET"])
+def get_outages():
+    """Retrieve all outages from the database."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM outages")
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(rows)  # returns a list of dict
+    except Error as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/outages", methods=["POST"])
+def create_outage():
+    """
+    Create a new outage record.
+    Expects JSON in body: 
+      {
+        "date": "YYYY-MM-DD",
+        "outageType": "string",
+        "start": "HH:MM:SS",
+        "end": "HH:MM:SS",
+        "duration": "string",
+        "comment": "string",
+        "engineer": "string"
+      }
+    """
+    data = request.json
+    if not data:
+        return jsonify({"error": "No input data provided"}), 400
+    
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """INSERT INTO outages (date, outageType, start, end, duration, comment, engineer)
+                 VALUES (%s, %s, %s, %s, %s, %s, %s)"""
+        val = (
+            data.get("date"),
+            data.get("outageType"),
+            data.get("start"),
+            data.get("end"),
+            data.get("duration"),
+            data.get("comment"),
+            data.get("engineer")
+        )
+        cursor.execute(sql, val)
+        conn.commit()
+        new_id = cursor.lastrowid
+        cursor.close()
+        conn.close()
+        
+        return jsonify({"id": new_id, **data}), 201
+    except Error as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/outages/<int:outage_id>", methods=["PUT"])
+def update_outage(outage_id):
+    """
+    Update an existing outage record by ID.
+    Expects JSON in body (same fields as POST).
+    """
+    data = request.json
+    if not data:
+        return jsonify({"error": "No input data provided"}), 400
+    
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        sql = """UPDATE outages
+                 SET date=%s, outageType=%s, start=%s, end=%s, duration=%s, comment=%s, engineer=%s
+                 WHERE id=%s"""
+        val = (
+            data.get("date"),
+            data.get("outageType"),
+            data.get("start"),
+            data.get("end"),
+            data.get("duration"),
+            data.get("comment"),
+            data.get("engineer"),
+            outage_id
+        )
+        cursor.execute(sql, val)
+        conn.commit()
+        cursor.close()
+        conn.close()
+        if cursor.rowcount == 0:
+            return jsonify({"error": f"No outage found with id {outage_id}"}), 404
+        return jsonify({"message": f"Outage {outage_id} updated"})
+    except Error as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/outages/<int:outage_id>", methods=["DELETE"])
+def delete_outage(outage_id):
+    """Delete an outage by ID."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM outages WHERE id=%s", (outage_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
+        if cursor.rowcount == 0:
+            return jsonify({"error": f"No outage found with id {outage_id}"}), 404
+        return jsonify({"message": f"Outage {outage_id} deleted"})
+    except Error as e:
+        return jsonify({"error": str(e)}), 500
+
+# -------------------------------------------------------------------
+# Run Flask App
+# -------------------------------------------------------------------
+if __name__ == "__main__":
+    app.run(port=5000, debug=True)
 
 
 
@@ -87,219 +185,6 @@ export default {
 
 
 
-
-
-
-
-
-
-/* FORM LAYOUT & STYLING */
-
-/* A container for the form so it's nicely centered on the page. */
-.form-container {
-  max-width: 600px;
-  margin: 2rem auto;
-  padding: 1.5rem;
-  background-color: #2a3341; /* Slightly lighter than the primary background */
-  border-radius: var(--radius);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
-}
-
-/* Each form group for label + input */
-.form-group {
-  margin-bottom: 1.25rem;
-}
-
-/* Form labels */
-.form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: var(--text-color);
-}
-
-/* Inputs, selects, textareas */
-.form-control {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid var(--border-color);
-  background-color: #2d3748;
-  color: var(--text-color);
-  border-radius: var(--radius);
-  box-sizing: border-box;
-  transition: border-color var(--transition-speed), background-color var(--transition-speed);
-}
-.form-control:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  background-color: #2c3650; /* slightly different shade on focus */
-}
-
-/* Buttons */
-.submit-button {
-  display: inline-block;
-  padding: 0.75rem 1.5rem;
-  background-color: var(--primary-color);
-  color: var(--text-color);
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: background-color var(--transition-speed);
-  font-weight: 600;
-}
-.submit-button:hover {
-  background-color: var(--accent-color);
-}
-.submit-button:focus {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
-}
-
-/* Small utility if you want to space out buttons or center them */
-.button-group {
-  display: flex;
-  gap: 1rem; /* space between buttons if you have multiple */
-  justify-content: flex-end; /* aligns buttons to the right by default */
-}
-
-
-
-
-
-
-
-
-
-
-
-
-/* app.css */
-
-/* 
-  Color Palette (Tailwind-inspired):
-  --background-color: #1a202c   (dark gray/charcoal)
-  --text-color:       #f5f5f5   (off-white)
-  --primary-color:    #4299e1   (medium blue)
-  --accent-color:     #3182ce   (darker blue for hover/active)
-  --border-color:     #2d3748   (slightly lighter charcoal for borders)
-*/
-
-:root {
-  --background-color: #1a202c;
-  --text-color: #f5f5f5;
-  --primary-color: #4299e1;
-  --accent-color: #3182ce;
-  --border-color: #2d3748;
-  --radius: 4px;
-  --transition-speed: 0.3s;
-  
-  /* Optional: nice system font stack or any custom font you prefer */
-  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol";
-}
-
-/* Global reset and base styling */
-html, body {
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-family);
-  background-color: var(--background-color);
-  color: var(--text-color);
-  height: 100%;
-}
-
-a {
-  color: var(--primary-color);
-  text-decoration: none;
-  transition: color var(--transition-speed);
-}
-a:hover {
-  color: var(--accent-color);
-}
-
-h1, h2, h3, h4, h5, h6 {
-  margin: 1.2rem 0 0.8rem;
-  color: var(--primary-color);
-}
-
-p {
-  margin: 1rem 0;
-}
-
-/* Container utility */
-.container {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 1rem;
-}
-
-/* Buttons */
-.button {
-  display: inline-block;
-  background-color: var(--primary-color);
-  color: var(--text-color);
-  padding: 0.75rem 1.25rem;
-  border: none;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: background-color var(--transition-speed);
-}
-.button:hover {
-  background-color: var(--accent-color);
-}
-.button:focus {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
-}
-
-/* Forms */
-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-}
-
-input[type="text"],
-input[type="date"],
-input[type="time"],
-textarea,
-select {
-  width: 100%;
-  padding: 0.6rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  background-color: #2d3748; /* Slightly lighter than background */
-  color: var(--text-color);
-  box-sizing: border-box;
-  transition: border-color var(--transition-speed);
-}
-input[type="text"]:focus,
-input[type="date"]:focus,
-input[type="time"]:focus,
-textarea:focus,
-select:focus {
-  outline: none;
-  border-color: var(--primary-color);
-}
-
-/* Tables */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1rem 0;
-}
-thead {
-  background-color: var(--border-color);
-}
-th, td {
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-color);
-  text-align: left;
-}
-tbody tr:hover {
-  background-color: #2d3748; /* highlight row on hover */
-}
 
 
 
