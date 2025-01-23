@@ -1,169 +1,59 @@
-curl -X POST http://localhost:5000/outages \
-     -H "Content-Type: application/json" \
-     -d '{
-       "date": "2025-01-01",
-       "outageType": "Network",
-       "start": "09:00:00",
-       "end": "10:00:00",
-       "duration": "1 hour",
-       "comment": "Scheduled maintenance",
-       "engineer": "Alice"
-     }'
-
-
 <template>
-  <div class="form-container">
-    <h2 class="text-xl font-bold mb-4">Add Outage</h2>
-    <form @submit.prevent="handleSubmit">
-      <div class="form-group">
-        <label for="date">Date</label>
-        <input
-          id="date"
-          v-model="form.date"
-          type="date"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="outageType">Outage Type</label>
-        <input
-          id="outageType"
-          v-model="form.outageType"
-          type="text"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="start">Start</label>
-        <input
-          id="start"
-          v-model="form.start"
-          type="time"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="end">End</label>
-        <input
-          id="end"
-          v-model="form.end"
-          type="time"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="duration">Duration</label>
-        <input
-          id="duration"
-          v-model="form.duration"
-          type="text"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="comment">Comment</label>
-        <textarea
-          id="comment"
-          v-model="form.comment"
-          class="form-control"
-        ></textarea>
-      </div>
-
-      <div class="form-group">
-        <label for="engineer">Engineer</label>
-        <input
-          id="engineer"
-          v-model="form.engineer"
-          type="text"
-          class="form-control"
-        />
-      </div>
-
-      <div class="button-group">
-        <button type="submit" class="submit-button">Submit</button>
-      </div>
-    </form>
-
-    <!-- Optional: show success/error messages -->
-    <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
-    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+  <div>
+    <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
+    <table class="table-auto w-full border-collapse border border-gray-300">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="border px-4 py-2">Date</th>
+          <th class="border px-4 py-2">Type</th>
+          <th class="border px-4 py-2">Start</th>
+          <th class="border px-4 py-2">End</th>
+          <th class="border px-4 py-2">Duration</th>
+          <th class="border px-4 py-2">Comment</th>
+          <th class="border px-4 py-2">Engineer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(outage, index) in outages" :key="index">
+          <td class="border px-4 py-2">{{ outage.date }}</td>
+          <td class="border px-4 py-2">{{ outage.outageType }}</td>
+          <td class="border px-4 py-2">{{ outage.start }}</td>
+          <td class="border px-4 py-2">{{ outage.end }}</td>
+          <td class="border px-4 py-2">{{ outage.duration }}</td>
+          <td class="border px-4 py-2">{{ outage.comment }}</td>
+          <td class="border px-4 py-2">{{ outage.engineer }}</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </template>
 
 <script>
 export default {
-  name: "OutageForm",
+  name: "OutageTable",
   data() {
     return {
-      form: {
-        date: "",
-        outageType: "",
-        start: "",
-        end: "",
-        duration: "",
-        comment: "",
-        engineer: "",
-      },
-      successMessage: "",
-      errorMessage: "",
+      outages: [],
     };
   },
-  methods: {
-    async handleSubmit() {
-      this.successMessage = "";
-      this.errorMessage = "";
-
-      try {
-        // Adjust URL if your backend is at a different address/port
-        const response = await fetch("http://localhost:5000/outages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(this.form),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to create outage");
-        }
-
-        const result = await response.json();
-        this.successMessage = `Outage (ID: ${result.id}) created successfully!`;
-
-        // Clear the form
-        this.form = {
-          date: "",
-          outageType: "",
-          start: "",
-          end: "",
-          duration: "",
-          comment: "",
-          engineer: "",
-        };
-      } catch (error) {
-        console.error("Error creating outage:", error);
-        this.errorMessage = error.message;
+  async created() {
+    try {
+      // Make sure your Flask server is running on localhost:5000
+      const response = await fetch("http://localhost:5000/outages");
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch outages: ${response.statusText}`);
       }
-    },
+
+      const data = await response.json();
+      this.outages = data; // Populate table
+    } catch (error) {
+      console.error("Error fetching outages:", error);
+    }
   },
 };
 </script>
 
-<style scoped>
-/* Optional: some quick styles if needed */
-.success-message {
-  color: #38a169; /* green */
-  margin-top: 1rem;
-}
-.error-message {
-  color: #e53e3e; /* red */
-  margin-top: 1rem;
-}
-</style>
 
 
 
