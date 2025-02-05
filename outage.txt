@@ -1,3 +1,41 @@
+<script setup>
+import { ref } from "vue";
+import { AgGridVue } from "ag-grid-vue3";
+import "ag-grid-community/styles/ag-grid.css"; // Core styles
+import "ag-grid-community/styles/ag-theme-alpine.css"; // Theme styles
+
+const columnDefs = ref([
+  { headerName: "ID", field: "id", sortable: true, filter: true },
+  { headerName: "Name", field: "name", sortable: true, filter: true },
+  { headerName: "Age", field: "age", sortable: true, filter: true },
+  { headerName: "Country", field: "country", sortable: true, filter: true },
+]);
+
+const rowData = ref([
+  { id: 1, name: "John Doe", age: 28, country: "USA" },
+  { id: 2, name: "Jane Smith", age: 34, country: "Canada" },
+  { id: 3, name: "Carlos Mendoza", age: 41, country: "Mexico" },
+  { id: 4, name: "Li Wei", age: 25, country: "China" },
+  { id: 5, name: "Aisha Khan", age: 30, country: "India" },
+]);
+
+const gridOptions = ref({
+  pagination: true,
+  paginationPageSize: 3, // Show 3 rows per page
+});
+</script>
+
+<template>
+  <div class="ag-theme-alpine" style="height: 400px; width: 600px;">
+    <AgGridVue
+      :columnDefs="columnDefs"
+      :rowData="rowData"
+      :gridOptions="gridOptions"
+    />
+  </div>
+</template>
+
+
 <template>
   <div>
     <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
