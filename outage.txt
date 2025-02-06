@@ -1,120 +1,53 @@
-<script setup>
-import { ref } from "vue";
-import { AgGridVue } from "ag-grid-vue3";
-import "ag-grid-community/styles/ag-grid.css"; // Core styles
-import "ag-grid-community/styles/ag-theme-alpine.css"; // Theme styles
-
-const columnDefs = ref([
-  { headerName: "ID", field: "id", sortable: true, filter: true },
-  { headerName: "Name", field: "name", sortable: true, filter: true },
-  { headerName: "Age", field: "age", sortable: true, filter: true },
-  { headerName: "Country", field: "country", sortable: true, filter: true },
-]);
-
-const rowData = ref([
-  { id: 1, name: "John Doe", age: 28, country: "USA" },
-  { id: 2, name: "Jane Smith", age: 34, country: "Canada" },
-  { id: 3, name: "Carlos Mendoza", age: 41, country: "Mexico" },
-  { id: 4, name: "Li Wei", age: 25, country: "China" },
-  { id: 5, name: "Aisha Khan", age: 30, country: "India" },
-]);
-
-const gridOptions = ref({
-  pagination: true,
-  paginationPageSize: 3, // Show 3 rows per page
-});
-</script>
-
 <template>
-  <div class="ag-theme-alpine" style="height: 400px; width: 600px;">
-    <AgGridVue
-      :columnDefs="columnDefs"
-      :rowData="rowData"
-      :gridOptions="gridOptions"
-    />
-  </div>
-</template>
-
-
-<template>
-  <div>
-    <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
-
-    <DataTable
-      v-model:filters="filters"
-      :value="outages"
-      paginator
-      :rows="10"
-      :rowsPerPageOptions="[5, 10, 20]"
-      sortMode="multiple"
-      removableSort
-      responsiveLayout="scroll"
-      class="p-datatable-striped"
-    >
-      <template #header>
-        <div class="table-header flex justify-between">
-          <span class="text-lg font-bold">Manage Outages</span>
-          <InputText
-            v-model="globalFilter"
-            placeholder="Search..."
-            class="p-inputtext-sm"
-          />
-        </div>
-      </template>
-
-      <Column field="date" header="Date" sortable></Column>
-      <Column field="outageType" header="Type" sortable></Column>
-      <Column field="start" header="Start Time" sortable></Column>
-      <Column field="end" header="End Time" sortable></Column>
-      <Column field="duration" header="Duration"></Column>
-      <Column field="comment" header="Comment"></Column>
-      <Column field="engineer" header="Engineer" sortable></Column>
-
-      <template #empty>
-        <div class="text-center py-4">No outage records found.</div>
-      </template>
-    </DataTable>
+  <div class="form-container">
+    <h2>Data Entry</h2>
+    <form @submit.prevent="addData">
+      <input v-model="formData.name" placeholder="Name" required />
+      <input v-model="formData.age" type="number" placeholder="Age" required />
+      <input v-model="formData.email" type="email" placeholder="Email" required />
+      <input v-model="formData.city" placeholder="City" required />
+      <input v-model="formData.country" placeholder="Country" required />
+      <button type="submit">Add Entry</button>
+    </form>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from "vue";
-import axios from "axios";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-import InputText from "primevue/inputtext";
-
 export default {
-  name: "OutageTable",
-  components: { DataTable, Column, InputText },
-  setup() {
-    const outages = ref([]);
-    const filters = ref({});
-    const globalFilter = ref("");
-
-    const fetchOutages = async () => {
-      try {
-        const { data } = await axios.get("http://localhost:5000/outages");
-        outages.value = data;
-      } catch (error) {
-        console.error("Error fetching outages:", error);
-      }
+  emits: ["add-entry"],
+  data() {
+    return {
+      formData: { name: "", age: "", email: "", city: "", country: "" },
     };
-
-    onMounted(fetchOutages);
-
-    return { outages, filters, globalFilter };
+  },
+  methods: {
+    addData() {
+      this.$emit("add-entry", { ...this.formData });
+      this.formData = { name: "", age: "", email: "", city: "", country: "" };
+    },
   },
 };
 </script>
 
 <style scoped>
-.table-header {
-  padding: 10px;
-  background: #1e3a8a; /* Dark blue header */
+.form-container {
+  padding: 1rem;
+  border-bottom: 2px solid #ccc;
+}
+form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+input {
+  padding: 8px;
+  border: 1px solid #ccc;
+}
+button {
+  padding: 8px;
+  background: blue;
   color: white;
-  font-size: 18px;
-  border-radius: 6px;
+  cursor: pointer;
 }
 </style>
 
@@ -123,6 +56,86 @@ export default {
 
 
 
+<template>
+  <div class="table-container">
+    <h2>Data Table</h2>
+    <ag-grid-vue
+      class="ag-theme-alpine"
+      style="height: 400px; width: 100%"
+      :columnDefs="columnDefs"
+      :rowData="rowData"
+      :pagination="true"
+      :paginationPageSize="5"
+      :defaultColDef="defaultColDef"
+    ></ag-grid-vue>
+  </div>
+</template>
+
+<script>
+import { AgGridVue } from "ag-grid-vue3";
+
+export default {
+  components: { AgGridVue },
+  props: ["rowData"],
+  data() {
+    return {
+      columnDefs: [
+        { field: "name", sortable: true, filter: true },
+        { field: "age", sortable: true, filter: "agNumberColumnFilter" },
+        { field: "email", sortable: true, filter: true },
+        { field: "city", sortable: true, filter: true },
+        { field: "country", sortable: true, filter: true },
+      ],
+      defaultColDef: { resizable: true, flex: 1 },
+    };
+  },
+};
+</script>
+
+<style>
+.table-container {
+  padding: 1rem;
+}
+.ag-theme-alpine {
+  height: 400px;
+}
+</style>
+
+
+
+
+
+<template>
+  <div>
+    <DataEntryForm @add-entry="addEntry" />
+    <DataTable :rowData="rowData" />
+  </div>
+</template>
+
+<script>
+import DataEntryForm from "./components/DataEntryForm.vue";
+import DataTable from "./components/DataTable.vue";
+
+export default {
+  components: { DataEntryForm, DataTable },
+  data() {
+    return {
+      rowData: [
+        { name: "Alice", age: 25, email: "alice@example.com", city: "New York", country: "USA" },
+        { name: "Bob", age: 30, email: "bob@example.com", city: "London", country: "UK" },
+        { name: "Charlie", age: 28, email: "charlie@example.com", city: "Berlin", country: "Germany" },
+        { name: "David", age: 35, email: "david@example.com", city: "Paris", country: "France" },
+        { name: "Eve", age: 22, email: "eve@example.com", city: "Madrid", country: "Spain" },
+      ],
+    };
+  },
+  methods: {
+    addEntry(newEntry) {
+      this.rowData.push(newEntry);
+    },
+  },
+};
+</script>
 
 
 
@@ -132,96 +145,9 @@ export default {
 
 
 
+import { createApp } from "vue";
+import App from "./App.vue";
+import "ag-grid-community/styles/ag-grid.css";
+import "ag-grid-community/styles/ag-theme-alpine.css";
 
-
-SELECT
-    -- Format the month start date into 'YYYY-MM' format for reporting.
-    DATE_FORMAT(periods.month_start, '%Y-%m') AS report_month,
-
-    -- Include the queue ID for grouping and reporting purposes.
-    j.queue_id,
-
-    -- Calculate the GPU utilization for the month.
-    ROUND(
-        (
-            SUM(
-                TIMESTAMPDIFF(
-                    SECOND,
-                    GREATEST(j.start_time, periods.month_start),
-                    LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-                ) / 3600 * j.ngpu
-            ) / (
-                -- Total available hours in the month = GPU Count * Days in Month * Hours in a Day.
-                CASE
-                    WHEN j.queue_id = 'mlaas' THEN 40
-                    WHEN j.queue_id = 'mlaas_a100' THEN 20
-                    WHEN j.queue_id = 'mlaas_h100' THEN 48
-                END * DATEDIFF(periods.month_end, periods.month_start) * 24
-            )
-        ) * 100, 2
-    ) AS utilization_percentage,
-
-    -- Calculate the weighted average of the utilizations for 'mlaas', 'mlaas_a100', and 'mlaas_h100'.
-    ROUND(
-        (
-            (SUM(CASE
-                    WHEN j.queue_id = 'mlaas' THEN
-                        TIMESTAMPDIFF(
-                            SECOND,
-                            GREATEST(j.start_time, periods.month_start),
-                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-                        ) / 3600 * j.ngpu
-                    ELSE 0
-                END) * 1) +
-            (SUM(CASE
-                    WHEN j.queue_id = 'mlaas_a100' THEN
-                        TIMESTAMPDIFF(
-                            SECOND,
-                            GREATEST(j.start_time, periods.month_start),
-                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-                        ) / 3600 * j.ngpu
-                    ELSE 0
-                END) * 2) +
-            (SUM(CASE
-                    WHEN j.queue_id = 'mlaas_h100' THEN
-                        TIMESTAMPDIFF(
-                            SECOND,
-                            GREATEST(j.start_time, periods.month_start),
-                            LEAST(IFNULL(j.complete_date, periods.month_end), periods.month_end)
-                        ) / 3600 * j.ngpu
-                    ELSE 0
-                END) * 4)
-        ) / (
-            7 * DATEDIFF(periods.month_end, periods.month_start) * 24
-        ), 2
-    ) AS weighted_utilization_percentage
-FROM (
-    -- Generate a list of start and end dates for the last 6 months.
-    SELECT
-        -- Generate the 15th of each month as the approximate start date of the reporting period.
-        DATE_FORMAT(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH), '%Y-%m-15') AS month_start,
-
-        -- Calculate the last day of the corresponding month as the end of the reporting period.
-        LAST_DAY(DATE_ADD(LAST_DAY(NOW()), INTERVAL -m.num MONTH)) AS month_end
-    FROM (
-        -- Create a simple list of numbers (0 to 5) to represent the last 6 months.
-        SELECT 1 AS num
-    ) m
-) periods
--- Join the jobs table to the generated period ranges to aggregate GPU usage and pending hours.
-LEFT JOIN job_hal_mlaas j
-ON 
-    -- Ensure the job starts before the period's end date.
-    j.start_time < periods.month_end
-
-    -- Exclude jobs with a '0000-00-00 00:00:00' start time (indicating the job hasn't started).
-    AND j.start_time != '0000-00-00 00:00:00'
-
-    -- Include jobs that are either completed or incomplete but overlap with the period.
-    AND (j.complete_date >= periods.month_start OR j.complete_date IS NULL)
-WHERE
-    -- Filter only jobs in the 'mlaas', 'mlaas_a100', or 'mlaas_h100' queues.
-    j.queue_id = 'mlaas' or j.queue_id = 'mlaas_a100' or j.queue_id = 'mlaas_h100' 
-GROUP BY
-    -- Group the results by the period's start and end dates and queue ID.
-    periods.month_start, periods.month_end, j.queue_id
+createApp(App).mount("#app");
