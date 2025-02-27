@@ -1,120 +1,16 @@
-using System;
-using System.Collections.Generic;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
-using Npgsql;
+version: '3.7'
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+    environment:
+      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
 
-public class PostgresConnector
-{
-    private readonly string _connectionString;
-    private readonly string _encryptionPassphrase;
-
-    public PostgresConnector(string connectionString, string encryptionPassphrase)
-    {
-        _connectionString = connectionString;
-        _encryptionPassphrase = encryptionPassphrase;
-    }
-
-    /// <summary>
-    /// Retrieves encrypted client credentials where group_id matches the provided value.
-    /// Decrypts them using AES-256 in C#.
-    /// </summary>
-    public async Task<(string ClientId, string ClientSecret)> GetClientCredentialsAsync(Guid groupId)
-    {
-        using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        string query = @"
-            SELECT client_id, client_secret
-            FROM credentials
-            JOIN tenant ON credentials.tenant_id = tenant.id
-            WHERE tenant.group_id = @group_id";
-
-        using var cmd = new NpgsqlCommand(query, conn);
-        cmd.Parameters.AddWithValue("group_id", groupId);
-
-        using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync())
-        {
-            string encryptedClientId = reader.GetString(0);
-            string encryptedClientSecret = reader.GetString(1);
-
-            string decryptedClientId = Decrypt(encryptedClientId, _encryptionPassphrase);
-            string decryptedClientSecret = Decrypt(encryptedClientSecret, _encryptionPassphrase);
-
-            return (decryptedClientId, decryptedClientSecret);
-        }
-
-        throw new Exception("No credentials found for the given group ID.");
-    }
-
-    /// <summary>
-    /// Retrieves dashboards for the tenant identified by the provided group_id.
-    /// Includes category details.
-    /// </summary>
-    public async Task<List<Dashboard>> GetDashboardsAsync(Guid groupId)
-    {
-        using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        string query = @"
-            SELECT d.name, d.url, d.thumbnail, c.name AS category_name
-            FROM dashboard d
-            JOIN category c ON d.category_id = c.id
-            JOIN tenant t ON c.tenant_id = t.id
-            WHERE t.group_id = @group_id";
-
-        using var cmd = new NpgsqlCommand(query, conn);
-        cmd.Parameters.AddWithValue("group_id", groupId);
-
-        var dashboards = new List<Dashboard>();
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            dashboards.Add(new Dashboard
-            {
-                Name = reader.GetString(0),
-                Url = reader.GetString(1),
-                Thumbnail = reader.IsDBNull(2) ? null : reader.GetString(2),
-                Category = reader.IsDBNull(3) ? null : reader.GetString(3)
-            });
-        }
-
-        return dashboards;
-    }
-
-    /// <summary>
-    /// Decrypts AES-256-CBC OpenSSL-encrypted strings.
-    /// </summary>
-    private static string Decrypt(string encryptedText, string passphrase)
-    {
-        string[] parts = encryptedText.Split(':');
-        if (parts.Length != 2)
-            throw new ArgumentException("Invalid encrypted text format.");
-
-        byte[] iv = Convert.FromBase64String(parts[0]);
-        byte[] cipherText = Convert.FromBase64String(parts[1]);
-
-        using var aes = Aes.Create();
-        aes.Key = new Rfc2898DeriveBytes(passphrase, Encoding.UTF8.GetBytes("salt"), 1000).GetBytes(32);
-        aes.IV = iv;
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
-
-        using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-        byte[] decryptedBytes = decryptor.TransformFinalBlock(cipherText, 0, cipherText.Length);
-        return Encoding.UTF8.GetString(decryptedBytes);
-    }
-}
-
-/// <summary>
-/// Represents a dashboard with its category details.
-/// </summary>
-public class Dashboard
-{
-    public string Name { get; set; }
-    public string Url { get; set; }
-    public string Thumbnail { get; set; }
-    public string Category { get; set; }
-}
+volumes:
+  grafana-storage:
