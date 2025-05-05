@@ -1,16 +1,541 @@
-version: '3.7'
-services:
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-storage:/var/lib/grafana
-    environment:
-      - GF_INSTALL_PLUGINS=yesoreyeram-infinity-datasource
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+<template>
+  <div>
+    <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
 
-volumes:
-  grafana-storage:
+    <ag-grid-vue
+      class="ag-theme-alpine-dark"
+      style="width: 100%; height: 500px;"
+      :rowData="outages"
+      :columnDefs="columnDefs"
+      :defaultColDef="defaultColDef"
+      :pagination="true"
+      :paginationPageSize="20"
+      :modules="modules"
+      @cell-clicked="onCellClicked"
+    ></ag-grid-vue>
+  </div>
+</template>
+
+<script>
+import { AgGridVue } from 'ag-grid-vue3';
+import { ClientSideRowModelModule } from '@ag-grid-community/client-side-row-model';
+
+export default {
+  name: "OutageTable",
+  components: {
+    AgGridVue,
+  },
+  data() {
+    return {
+      outages: [],
+      columnDefs: [
+        { field: 'date', headerName: 'Date', sortable: true },
+        { field: 'outageType', headerName: 'Type', sortable: true },
+        { field: 'start', headerName: 'Start', sortable: true },
+        { field: 'end', headerName: 'End', sortable: true },
+        {
+          field: 'duration',
+          headerName: 'Duration',
+          sortable: true,
+          valueGetter: params => this.calculateDuration(params.data.start, params.data.end)
+        },
+        { field: 'service', headerName: 'Service', sortable: true },
+        { field: 'comment', headerName: 'Comment', sortable: true },
+        { field: 'engineer', headerName: 'Engineer', sortable: true },
+        { 
+          field: 'actions', 
+          headerName: 'Actions', 
+          sortable: false,
+          cellRenderer: function(params) {
+            const completeClass = params.data.complete === 'Y' ? 'text-green-500' : 'text-gray-400';
+            const completeTitle = params.data.complete === 'Y' ? 'Mark as Incomplete' : 'Mark as Complete';
+            
+            return `
+              <div style="display: flex; gap: 10px; justify-content: center;">
+                <button data-action="complete" data-id="${params.data.id}" class="action-button" title="${completeTitle}">
+                  <span class="${completeClass}" style="font-size: 18px;">✓</span>
+                </button>
+                <button data-action="delete" data-id="${params.data.id}" class="action-button" title="Delete Outage">
+                  <span style="color: #EF4444; font-size: 18px;">×</span>
+                </button>
+              </div>
+            `;
+          }
+        }
+      ],
+      defaultColDef: {
+        flex: 1,
+        minWidth: 100,
+        filter: true,
+        resizable: true,
+      },
+      sortField: null,
+      sortOrder: null,
+      modules: [ClientSideRowModelModule]
+    };
+  },
+  async created() {
+    try {
+      const response = await fetch("http://127.0.0.1:5000/outages");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch outages: ${response.statusText}`);
+      }
+      const data = await response.json();
+      this.outages = data; // Populate table
+    } catch (error) {
+      console.error("Error fetching outages:", error);
+    }
+  },
+  methods: {
+    calculateDuration(start, end) {
+      // If there's no end time, use current time
+      if (!end || end.trim() === '') {
+        const today = new Date();
+        
+        // Get outage date from row data
+        const outageDate = new Date(this.outages.find(o => o.start === start)?.date || new Date());
+        
+        // Calculate days difference
+        let daysDiff = Math.floor((today - outageDate) / (1000 * 60 * 60 * 24));
+        
+        // Format current time
+        const clockHour = String(today.getHours()).padStart(2, '0');
+        const clockMinute = String(today.getMinutes()).padStart(2, '0');
+        
+        // Use current time as end time for calculation
+        end = `${clockHour}:${clockMinute}:00`; // Add seconds for calculation
+        
+        // Process time components
+        let startParts = start.split(':');
+        let endParts = end.split(':');
+        
+        // Add seconds if missing
+        if (startParts.length === 2) startParts.push('00');
+        if (endParts.length === 2) endParts.push('00');
+        
+        // Convert to numbers
+        const startH = parseInt(startParts[0], 10);
+        const startM = parseInt(startParts[1], 10);
+        const startS = parseInt(startParts[2], 10);
+        
+        const endH = parseInt(endParts[0], 10);
+        const endM = parseInt(endParts[1], 10);
+        const endS = parseInt(endParts[2], 10);
+        
+        // Calculate time difference
+        let hourDiff = endH - startH;
+        let minDiff = endM - startM;
+        let secDiff = endS - startS; // Keep for calculations but won't display
+        
+        // Handle time borrowing
+        if (secDiff < 0) {
+          secDiff += 60;
+          minDiff--;
+        }
+        
+        if (minDiff < 0) {
+          minDiff += 60;
+          hourDiff--;
+        }
+        
+        if (hourDiff < 0) {
+          hourDiff += 24;
+          daysDiff--; // Borrow from days
+        }
+        
+        // Format the result as DD:HH:MM (always showing days)
+        return `${String(daysDiff).padStart(2, '0')}:${String(hourDiff).padStart(2, '0')}:${String(minDiff).padStart(2, '0')}`;
+      }
+      
+      // When end time exists - adapt this part too
+      // Process time components
+      let startParts = start.split(':');
+      let endParts = end.split(':');
+      
+      // Add seconds if missing
+      if (startParts.length === 2) startParts.push('00');
+      if (endParts.length === 2) endParts.push('00');
+      
+      // Convert to numbers
+      const startH = parseInt(startParts[0], 10);
+      const startM = parseInt(startParts[1], 10);
+      const startS = parseInt(startParts[2], 10);
+      
+      const endH = parseInt(endParts[0], 10);
+      const endM = parseInt(endParts[1], 10);
+      const endS = parseInt(endParts[2], 10);
+      
+      // Calculate time difference
+      let hourDiff = endH - startH;
+      let minDiff = endM - startM;
+      let secDiff = endS - startS;
+      let daysDiff = 0; // Start with 0 days when we have both times
+      
+      // Handle time borrowing
+      if (secDiff < 0) {
+        secDiff += 60;
+        minDiff--;
+      }
+      
+      if (minDiff < 0) {
+        minDiff += 60;
+        hourDiff--;
+      }
+      
+      if (hourDiff < 0) {
+        hourDiff += 24;
+        daysDiff--; // Borrow from days
+      }
+      
+      // Format the result as DD:HH:MM
+      return `${String(daysDiff).padStart(2, '0')}:${String(hourDiff).padStart(2, '0')}:${String(minDiff).padStart(2, '0')}`;
+    },
+
+    compareDuration(durationA, durationB, sortOrder) {
+      const [hoursA, minutesA, secondsA] = durationA.split(':').map(Number);
+      const [hoursB, minutesB, secondsB] = durationB.split(':').map(Number);
+      const totalSecondsA = hoursA * 3600 + minutesA * 60 + secondsA;
+      const totalSecondsB = hoursB * 3600 + minutesB * 60 + secondsB;
+      return (totalSecondsA - totalSecondsB) * sortOrder;
+    },
+    async toggleComplete(outage) {
+      try {
+        outage.complete = outage.complete === 'Y' ? 'N' : 'Y';
+        const updatedOutage = { ...outage, complete: outage.complete };
+        const response = await fetch(`http://127.0.0.1:5000/outage/${outage.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updatedOutage),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to update outage: ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error("Error updating outage:", error);
+      }
+    },
+    async deleteOutage(outageId) {
+      try {
+        const response = await fetch(`/outages/${outageId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          this.outages = this.outages.filter(outage => outage.id !== outageId);
+        } else {
+          console.error('Failed to delete outage');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    },
+    onCellClicked(params) {
+      // Only handle clicks on buttons
+      const target = params.event.target;
+      const button = target.closest('[data-action]');
+      
+      if (!button) return;
+      
+      const action = button.getAttribute('data-action');
+      const id = button.getAttribute('data-id');
+      
+      if (action === 'complete') {
+        const outage = this.outages.find(o => o.id === id);
+        if (outage) this.toggleComplete(outage);
+      } else if (action === 'delete') {
+        this.deleteOutage(id);
+      }
+    },
+  }
+};
+</script>
+
+<style>
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
+/* Custom dark theme */
+.ag-theme-alpine {
+  --ag-background-color: #1e1e1e;
+  --ag-foreground-color: #fff;
+  --ag-border-color: #444;
+  --ag-header-background-color: #333;
+  --ag-header-foreground-color: #fff;
+  --ag-odd-row-background-color: #262626;
+  --ag-row-hover-color: rgba(255, 255, 255, 0.1);
+  --ag-selected-row-background-color: rgba(0, 120, 215, 0.3);
+}
+
+.table-header {
+  padding: 10px;
+  background: #1e3a8a; /* Dark blue header */
+  color: white;
+  font-size: 18px;
+  border-radius: 6px;
+}
+
+.action-button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.action-button:hover {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+.text-green-500 {
+  color: #10B981;
+}
+
+.text-gray-400 {
+  color: #9CA3AF;
+}
+</style>
+
+
+<template>
+  <div class="form-container">
+    <h2 class="text-xl font-bold mb-4">Add Outage</h2>
+    <form @submit.prevent="handleSubmit">
+      <div class="form-group">
+        <label for="date">Date</label>
+        <input
+          id="date"
+          v-model="form.date"
+          type="date"
+          class="form-control"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="outageType">Outage Type</label>
+        <select id="outageType" v-model="form.outageType" class="form-control">
+          <option>Patching</option>
+          <option>GPU</option>
+          <option>Compute</option>
+          <option>VDI</option>
+          <option>Storage</option>
+          <option>Change</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="service">Service</label>
+        <select id="service" v-model="form.service" class="form-control">
+          <option>MLaaS</option>
+          <option>DT4D</option>
+          <option>Big Data</option>
+          <option>DTR</option>
+          <option>SVDI</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="planned">Planned</label>
+        <select id="planned" v-model="form.planned" class="form-control">
+          <option>Yes</option>
+          <option>No</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="start">Start</label>
+        <input
+          id="start"
+          v-model="form.start"
+          type="time"
+          class="form-control"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="end">End</label>
+        <input
+          id="end"
+          v-model="form.end"
+          type="time"
+          class="form-control"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="comment">Comment</label>
+        <input
+          id="comment"
+          v-model="form.comment"
+          type="text"
+          class="form-control"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="engineer">Engineer</label>
+        <input
+          id="engineer"
+          v-model="form.engineer"
+          type="text"
+          class="form-control"
+        />
+      </div>
+
+      <div class="button-group">
+        <button type="submit" class="submit-button">Submit</button>
+      </div>
+    </form>
+
+    <!-- Optional: show success/error messages -->
+    <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
+    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
+  </div>
+</template>
+
+<script>
+export default {
+  name: "OutageForm",
+  data() {
+    return {
+      form: this.getDefaultFormValues(),
+      successMessage: "",
+      errorMessage: "",
+    };
+  },
+  methods: {
+    getDefaultFormValues() {
+      // Existing implementation remains the same
+      const rightNow = new Date();
+      
+      const currentYear = rightNow.getFullYear();
+      const currentMonth = String(rightNow.getMonth() + 1).padStart(2, '0');
+      const currentDay = String(rightNow.getDate()).padStart(2, '0');
+      const formattedDate = `${currentYear}-${currentMonth}-${currentDay}`;
+      
+      const currentHours = String(rightNow.getHours()).padStart(2, '0');
+      const currentMinutes = String(rightNow.getMinutes()).padStart(2, '0');
+      const formattedTime = `${currentHours}:${currentMinutes}`;
+      
+      return {
+        date: formattedDate,
+        outageType: "",
+        service: "",
+        planned: "",
+        start: formattedTime,
+        end: "",
+        comment: "",
+        engineer: "",
+      };
+    },
+    
+    async handleSubmit() {
+      this.successMessage = "";
+      this.errorMessage = "";
+      console.log("JSON:" + JSON.stringify(this.form))
+
+      try {
+        const response = await fetch("http://127.0.0.1:5000/outages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(this.form),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to create outage");
+        }
+
+        const result = await response.json();
+        this.successMessage = `Outage (ID: ${result.id}) created successfully!`;
+        
+        // Show success message briefly then redirect
+        setTimeout(() => {
+          this.$router.push('/');
+        }, 800); // Short delay to show success message
+        
+      } catch (error) {
+        console.error("Error creating outage:", error);
+        this.errorMessage = error.message;
+      }
+    },
+  },
+};
+</script>
+
+<style scoped>
+/* Success/error styles remain unchanged */
+.success-message {
+  color: #38a169; /* green */
+  margin-top: 1rem;
+}
+.error-message {
+  color: #e53e3e; /* red */
+  margin-top: 1rem;
+}
+
+/* Updated Chrome autofill fix for dark background */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  /* Change from white to your dark background color */
+  -webkit-box-shadow: 0 0 0 1000px #2d3748 inset !important;
+  box-shadow: 0 0 0 1000px #2d3748 inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+  border-color: #4a5568;
+  transition-delay: 9999s;
+  transition-property: background-color;
+}
+
+/* Remove the animation approach since we're directly setting colors */
+</style>
+
+
+
+<template>
+  <nav>
+    <router-link to="/">Outages</router-link> |
+    <router-link to="/add">Add</router-link> |
+    <router-link v-if="!isAuthenticated" to="/login">Login</router-link>
+    <router-link v-if="isAuthenticated" to="/logout">Logout</router-link>
+  </nav>
+  <router-view></router-view>
+</template>
+
+<script>
+export default {
+  name: 'App',
+  data() {
+    return {
+      isAuthenticated: false
+    }
+  },
+  created() {
+    // Check if user is already authenticated (from localStorage, session, etc.)
+    this.checkAuthStatus();
+  },
+  methods: {
+    checkAuthStatus() {
+      // Example: Check localStorage for auth token
+      const token = localStorage.getItem('authToken');
+      this.isAuthenticated = !!token;
+    }
+  }
+};
+</script>
+
+<style>
+#app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+  margin-top: 60px;
+}
+</style>
