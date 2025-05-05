@@ -1,3 +1,191 @@
+<!-- src/components/Modal.vue -->
+<template>
+  <teleport to="body">
+    <div
+      v-show="isOpen"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-50"
+      @click.self="close"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg w-full max-w-lg mx-4 overflow-hidden">
+        <!-- header -->
+        <div class="flex justify-between items-center px-6 py-4 border-b dark:border-gray-700">
+          <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+            <slot name="header">Modal Title</slot>
+          </h3>
+          <button @click="close" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+            &times;
+          </button>
+        </div>
+
+        <!-- main content -->
+        <div class="p-6 text-gray-800 dark:text-gray-200">
+          <slot>Default content…</slot>
+        </div>
+
+        <!-- footer buttons -->
+        <div class="flex justify-end px-6 py-4 border-t dark:border-gray-700 space-x-2">
+          <slot name="footer">
+            <button @click="close" class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+              Close
+            </button>
+          </slot>
+        </div>
+      </div>
+    </div>
+  </teleport>
+</template>
+
+<script>
+export default {
+  name: 'Modal',
+  props: {
+    modelValue: Boolean
+  },
+  computed: {
+    isOpen: {
+      get() { return this.modelValue; },
+      set(v) { this.$emit('update:modelValue', v); }
+    }
+  },
+  methods: {
+    close() {
+      this.isOpen = false;
+    }
+  }
+}
+</script>
+
+
+
+
+
+--- OutageTable.vue
++<script>
++import Modal from '@/components/Modal.vue';
+ import { AgGridVue } from 'ag-grid-vue3';
+ import { ClientSideRowModelModule } from '@ag-grid-community/client-side-row-model';
+ 
+ export default {
+   name: "OutageTable",
++  components: { AgGridVue, Modal },
+   data() {
+     return {
+       outages: [],
++      showModal: false,
++      selectedOutage: null,
+       columnDefs: [ /* …your existing columns… */ ],
+       defaultColDef: { /* … */ },
+       modules: [ClientSideRowModelModule]
+     };
+   },
+   async created() { /* …fetch outages… */ },
+   methods: {
++    openModal(params) {
++      this.selectedOutage = params.data;
++      this.showModal = true;
++    },
+     onCellClicked(params) { /* …existing action buttons… */ },
+   }
+ };
+ </script>
+ 
+ <template>
+   <div>
+     <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
+ 
+     <ag-grid-vue
+       class="ag-theme-alpine-dark"
+       style="width: 100%; height: 500px;"
+       :rowData="outages"
+       :columnDefs="columnDefs"
+       :defaultColDef="defaultColDef"
+       :pagination="true"
+       :paginationPageSize="20"
+       :modules="modules"
+-      @cell-clicked="onCellClicked"
++      @row-clicked="openModal"
++      @cell-clicked="onCellClicked"
+     ></ag-grid-vue>
+ 
++    <Modal v-model="showModal">
++      <template #header>
++        Outage Details (ID: {{ selectedOutage?.id }})
++      </template>
++
++      <div v-if="selectedOutage">
++        <p><strong>Date:</strong> {{ selectedOutage.date }}</p>
++        <p><strong>Type:</strong> {{ selectedOutage.outageType }}</p>
++        <p><strong>Service:</strong> {{ selectedOutage.service }}</p>
++        <p><strong>Start:</strong> {{ selectedOutage.start }}</p>
++        <p><strong>End:</strong> {{ selectedOutage.end || '—' }}</p>
++        <p><strong>Duration:</strong> {{ calculateDuration(selectedOutage.start, selectedOutage.end) }}</p>
++        <p><strong>Engineer:</strong> {{ selectedOutage.engineer }}</p>
++        <p><strong>Comment:</strong> {{ selectedOutage.comment }}</p>
++      </div>
++      <template #footer>
++        <button @click="showModal = false" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
++          Close
++        </button>
++      </template>
++    </Modal>
+   </div>
+ </template>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import React from 'react';
 
 interface ModalProps {
