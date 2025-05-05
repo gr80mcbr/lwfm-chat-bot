@@ -1,3 +1,216 @@
+import React from 'react';
+
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+}
+
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
+      <div className="bg-white rounded-xl w-full max-w-xl shadow-lg relative">
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-gray-600 hover:text-black text-lg font-bold"
+        >
+          &times;
+        </button>
+
+        {/* Title */}
+        {title && <div className="border-b px-6 py-4 text-xl font-semibold">{title}</div>}
+
+        {/* Content */}
+        <div className="p-6">{children}</div>
+
+        {/* Footer */}
+        {footer && <div className="border-t px-6 py-4 bg-gray-50">{footer}</div>}
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
+<template>
+  <div>
+    <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
+
+    <ag-grid-vue
+      class="ag-theme-alpine-dark"
+      style="width: 100%; height: 500px;"
+      :rowData="outages"
+      :columnDefs="columnDefs"
+      :defaultColDef="defaultColDef"
+      :pagination="true"
+      :paginationPageSize="20"
+      :modules="modules"
+      @cell-clicked="onCellClicked"
+      @row-clicked="onRowClicked"
+    ></ag-grid-vue>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div class="bg-white rounded-lg shadow-lg w-full max-w-xl relative">
+        <!-- Close Button -->
+        <button @click="closeModal" class="absolute top-2 right-2 text-gray-600 hover:text-black text-xl">&times;</button>
+
+        <!-- Content -->
+        <div class="p-6">
+          <h2 class="text-xl font-bold mb-4">Outage Details</h2>
+          <p><strong>Date:</strong> {{ selectedOutage.date }}</p>
+          <p><strong>Type:</strong> {{ selectedOutage.outageType }}</p>
+          <p><strong>Start:</strong> {{ selectedOutage.start }}</p>
+          <p><strong>End:</strong> {{ selectedOutage.end || 'N/A' }}</p>
+          <p><strong>Duration:</strong> {{ calculateDuration(selectedOutage.start, selectedOutage.end) }}</p>
+          <p><strong>Service:</strong> {{ selectedOutage.service }}</p>
+          <p><strong>Comment:</strong> {{ selectedOutage.comment }}</p>
+          <p><strong>Engineer:</strong> {{ selectedOutage.engineer }}</p>
+        </div>
+
+        <!-- Footer -->
+        <div class="border-t px-6 py-4 flex justify-end bg-gray-50">
+          <button @click="closeModal" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { AgGridVue } from 'ag-grid-vue3';
+import { ClientSideRowModelModule } from '@ag-grid-community/client-side-row-model';
+
+export default {
+  name: "OutageTable",
+  components: { AgGridVue },
+  data() {
+    return {
+      outages: [],
+      selectedOutage: null,
+      showModal: false,
+      columnDefs: [
+        { field: 'date', headerName: 'Date', sortable: true },
+        { field: 'outageType', headerName: 'Type', sortable: true },
+        { field: 'start', headerName: 'Start', sortable: true },
+        { field: 'end', headerName: 'End', sortable: true },
+        {
+          field: 'duration',
+          headerName: 'Duration',
+          sortable: true,
+          valueGetter: params => this.calculateDuration(params.data.start, params.data.end)
+        },
+        { field: 'service', headerName: 'Service', sortable: true },
+        { field: 'comment', headerName: 'Comment', sortable: true },
+        { field: 'engineer', headerName: 'Engineer', sortable: true },
+        { 
+          field: 'actions', 
+          headerName: 'Actions', 
+          sortable: false,
+          cellRenderer: function(params) {
+            const completeClass = params.data.complete === 'Y' ? 'text-green-500' : 'text-gray-400';
+            const completeTitle = params.data.complete === 'Y' ? 'Mark as Incomplete' : 'Mark as Complete';
+            return `
+              <div style="display: flex; gap: 10px; justify-content: center;">
+                <button data-action="complete" data-id="${params.data.id}" class="action-button" title="${completeTitle}">
+                  <span class="${completeClass}" style="font-size: 18px;">✓</span>
+                </button>
+                <button data-action="delete" data-id="${params.data.id}" class="action-button" title="Delete Outage">
+                  <span style="color: #EF4444; font-size: 18px;">×</span>
+                </button>
+              </div>
+            `;
+          }
+        }
+      ],
+      defaultColDef: {
+        flex: 1,
+        minWidth: 100,
+        filter: true,
+        resizable: true,
+      },
+      modules: [ClientSideRowModelModule],
+    };
+  },
+  created() {
+    this.fetchOutages();
+  },
+  methods: {
+    async fetchOutages() {
+      try {
+        const response = await fetch("http://127.0.0.1:5000/outages");
+        if (!response.ok) throw new Error(`Failed to fetch outages: ${response.statusText}`);
+        const data = await response.json();
+        this.outages = data;
+      } catch (error) {
+        console.error("Error fetching outages:", error);
+      }
+    },
+    onRowClicked(event) {
+      this.selectedOutage = event.data;
+      this.showModal = true;
+    },
+    closeModal() {
+      this.showModal = false;
+      this.selectedOutage = null;
+    },
+    // ... existing methods (calculateDuration, toggleComplete, deleteOutage, etc.) remain unchanged
+  }
+};
+</script>
+
+<style scoped>
+/* same styles as before + modal styles if needed */
+</style>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <template>
   <div>
     <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
