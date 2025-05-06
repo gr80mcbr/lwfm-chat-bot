@@ -1,3 +1,36 @@
+// Don't touch original outage object
+const updatedOutage = {
+  ...outage,
+  complete: outage.complete === 'Y' ? 'N' : 'Y'
+};
+
+// Prepare payload for backend (strip comments if needed)
+const payload = { ...updatedOutage };
+delete payload.comments;
+
+// Format date only in payload
+if (payload.date) {
+  const date = new Date(payload.date);
+  payload.date = date.toISOString().split('T')[0];
+}
+
+// Send payload
+await fetch(`http://127.0.0.1:5000/outage/${outage.id}`, {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload),
+});
+
+// Update local data *without removing comments*
+this.outages = this.outages.map(o => o.id === updatedOutage.id ? { ...updatedOutage } : o);
+this.selectedOutage = { ...updatedOutage };
+
+
+
+
+
+
+
 async toggleComplete(outage) {
   try {
     // Create a shallow clone and toggle `complete`
