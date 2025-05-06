@@ -1,3 +1,42 @@
+async toggleComplete(outage) {
+  try {
+    // Create a shallow clone and toggle `complete`
+    const updatedOutage = { ...outage, complete: outage.complete === 'Y' ? 'N' : 'Y' };
+
+    // Remove comments if necessary
+    delete updatedOutage.comments;
+
+    // Format the date correctly
+    if (updatedOutage.date) {
+      const date = new Date(updatedOutage.date);
+      updatedOutage.date = date.toISOString().split('T')[0];
+    }
+
+    // Send update to backend
+    const response = await fetch(`http://127.0.0.1:5000/outage/${outage.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updatedOutage),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update outage: ${response.statusText}`);
+    }
+
+    // Update local array with a full copy to ensure reactivity
+    this.outages = this.outages.map(o => o.id === updatedOutage.id ? { ...updatedOutage } : o);
+
+    // Also update modal view
+    this.selectedOutage = { ...updatedOutage };
+  } catch (error) {
+    console.error("Error updating outage:", error);
+  }
+}
+
+
+
+
+
 <template>
   <div>
     <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
