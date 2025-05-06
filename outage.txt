@@ -1,233 +1,3 @@
-<!-- src/components/Modal.vue -->
-<template>
-  <teleport to="body">
-    <div
-      v-show="isOpen"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-50"
-      @click.self="close"
-    >
-      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg w-full max-w-lg mx-4 overflow-hidden">
-        <!-- header -->
-        <div class="flex justify-between items-center px-6 py-4 border-b dark:border-gray-700">
-          <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-            <slot name="header">Modal Title</slot>
-          </h3>
-          <button @click="close" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-            &times;
-          </button>
-        </div>
-
-        <!-- main content -->
-        <div class="p-6 text-gray-800 dark:text-gray-200">
-          <slot>Default content…</slot>
-        </div>
-
-        <!-- footer buttons -->
-        <div class="flex justify-end px-6 py-4 border-t dark:border-gray-700 space-x-2">
-          <slot name="footer">
-            <button @click="close" class="px-4 py-2 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
-              Close
-            </button>
-          </slot>
-        </div>
-      </div>
-    </div>
-  </teleport>
-</template>
-
-<script>
-export default {
-  name: 'Modal',
-  props: {
-    modelValue: Boolean
-  },
-  computed: {
-    isOpen: {
-      get() { return this.modelValue; },
-      set(v) { this.$emit('update:modelValue', v); }
-    }
-  },
-  methods: {
-    close() {
-      this.isOpen = false;
-    }
-  }
-}
-</script>
-
-
-
-
-
---- OutageTable.vue
-+<script>
-+import Modal from '@/components/Modal.vue';
- import { AgGridVue } from 'ag-grid-vue3';
- import { ClientSideRowModelModule } from '@ag-grid-community/client-side-row-model';
- 
- export default {
-   name: "OutageTable",
-+  components: { AgGridVue, Modal },
-   data() {
-     return {
-       outages: [],
-+      showModal: false,
-+      selectedOutage: null,
-       columnDefs: [ /* …your existing columns… */ ],
-       defaultColDef: { /* … */ },
-       modules: [ClientSideRowModelModule]
-     };
-   },
-   async created() { /* …fetch outages… */ },
-   methods: {
-+    openModal(params) {
-+      this.selectedOutage = params.data;
-+      this.showModal = true;
-+    },
-     onCellClicked(params) { /* …existing action buttons… */ },
-   }
- };
- </script>
- 
- <template>
-   <div>
-     <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
- 
-     <ag-grid-vue
-       class="ag-theme-alpine-dark"
-       style="width: 100%; height: 500px;"
-       :rowData="outages"
-       :columnDefs="columnDefs"
-       :defaultColDef="defaultColDef"
-       :pagination="true"
-       :paginationPageSize="20"
-       :modules="modules"
--      @cell-clicked="onCellClicked"
-+      @row-clicked="openModal"
-+      @cell-clicked="onCellClicked"
-     ></ag-grid-vue>
- 
-+    <Modal v-model="showModal">
-+      <template #header>
-+        Outage Details (ID: {{ selectedOutage?.id }})
-+      </template>
-+
-+      <div v-if="selectedOutage">
-+        <p><strong>Date:</strong> {{ selectedOutage.date }}</p>
-+        <p><strong>Type:</strong> {{ selectedOutage.outageType }}</p>
-+        <p><strong>Service:</strong> {{ selectedOutage.service }}</p>
-+        <p><strong>Start:</strong> {{ selectedOutage.start }}</p>
-+        <p><strong>End:</strong> {{ selectedOutage.end || '—' }}</p>
-+        <p><strong>Duration:</strong> {{ calculateDuration(selectedOutage.start, selectedOutage.end) }}</p>
-+        <p><strong>Engineer:</strong> {{ selectedOutage.engineer }}</p>
-+        <p><strong>Comment:</strong> {{ selectedOutage.comment }}</p>
-+      </div>
-+      <template #footer>
-+        <button @click="showModal = false" class="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
-+          Close
-+        </button>
-+      </template>
-+    </Modal>
-   </div>
- </template>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import React from 'react';
-
-interface ModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title?: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-}
-
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white rounded-xl w-full max-w-xl shadow-lg relative">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 text-gray-600 hover:text-black text-lg font-bold"
-        >
-          &times;
-        </button>
-
-        {/* Title */}
-        {title && <div className="border-b px-6 py-4 text-xl font-semibold">{title}</div>}
-
-        {/* Content */}
-        <div className="p-6">{children}</div>
-
-        {/* Footer */}
-        {footer && <div className="border-t px-6 py-4 bg-gray-50">{footer}</div>}
-      </div>
-    </div>
-  );
-};
-
-
-
-
-
-
 <template>
   <div>
     <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
@@ -241,179 +11,36 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       :pagination="true"
       :paginationPageSize="20"
       :modules="modules"
-      @cell-clicked="onCellClicked"
-      @row-clicked="onRowClicked"
+      @rowClicked="onRowClicked"
     ></ag-grid-vue>
 
     <!-- Modal -->
-    <div v-if="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div class="bg-white rounded-lg shadow-lg w-full max-w-xl relative">
-        <!-- Close Button -->
-        <button @click="closeModal" class="absolute top-2 right-2 text-gray-600 hover:text-black text-xl">&times;</button>
-
-        <!-- Content -->
-        <div class="p-6">
-          <h2 class="text-xl font-bold mb-4">Outage Details</h2>
-          <p><strong>Date:</strong> {{ selectedOutage.date }}</p>
-          <p><strong>Type:</strong> {{ selectedOutage.outageType }}</p>
-          <p><strong>Start:</strong> {{ selectedOutage.start }}</p>
-          <p><strong>End:</strong> {{ selectedOutage.end || 'N/A' }}</p>
-          <p><strong>Duration:</strong> {{ calculateDuration(selectedOutage.start, selectedOutage.end) }}</p>
-          <p><strong>Service:</strong> {{ selectedOutage.service }}</p>
-          <p><strong>Comment:</strong> {{ selectedOutage.comment }}</p>
-          <p><strong>Engineer:</strong> {{ selectedOutage.engineer }}</p>
+    <div v-if="showModal" class="modal-overlay">
+      <div class="modal">
+        <button class="modal-close" @click="closeModal">×</button>
+        <h2 class="modal-title">Outage Details</h2>
+        <div class="modal-content">
+          <table>
+            <tbody>
+              <tr v-for="(value, key) in selectedOutage" :key="key">
+                <td class="font-bold">{{ key }}</td>
+                <td>{{ value }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-
-        <!-- Footer -->
-        <div class="border-t px-6 py-4 flex justify-end bg-gray-50">
-          <button @click="closeModal" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Close</button>
+        <div class="modal-actions">
+          <label class="toggle-label">
+            <input
+              type="checkbox"
+              :checked="selectedOutage.complete === 'Y'"
+              @change="toggleComplete(selectedOutage)"
+            />
+            Complete
+          </label>
         </div>
       </div>
     </div>
-  </div>
-</template>
-
-<script>
-import { AgGridVue } from 'ag-grid-vue3';
-import { ClientSideRowModelModule } from '@ag-grid-community/client-side-row-model';
-
-export default {
-  name: "OutageTable",
-  components: { AgGridVue },
-  data() {
-    return {
-      outages: [],
-      selectedOutage: null,
-      showModal: false,
-      columnDefs: [
-        { field: 'date', headerName: 'Date', sortable: true },
-        { field: 'outageType', headerName: 'Type', sortable: true },
-        { field: 'start', headerName: 'Start', sortable: true },
-        { field: 'end', headerName: 'End', sortable: true },
-        {
-          field: 'duration',
-          headerName: 'Duration',
-          sortable: true,
-          valueGetter: params => this.calculateDuration(params.data.start, params.data.end)
-        },
-        { field: 'service', headerName: 'Service', sortable: true },
-        { field: 'comment', headerName: 'Comment', sortable: true },
-        { field: 'engineer', headerName: 'Engineer', sortable: true },
-        { 
-          field: 'actions', 
-          headerName: 'Actions', 
-          sortable: false,
-          cellRenderer: function(params) {
-            const completeClass = params.data.complete === 'Y' ? 'text-green-500' : 'text-gray-400';
-            const completeTitle = params.data.complete === 'Y' ? 'Mark as Incomplete' : 'Mark as Complete';
-            return `
-              <div style="display: flex; gap: 10px; justify-content: center;">
-                <button data-action="complete" data-id="${params.data.id}" class="action-button" title="${completeTitle}">
-                  <span class="${completeClass}" style="font-size: 18px;">✓</span>
-                </button>
-                <button data-action="delete" data-id="${params.data.id}" class="action-button" title="Delete Outage">
-                  <span style="color: #EF4444; font-size: 18px;">×</span>
-                </button>
-              </div>
-            `;
-          }
-        }
-      ],
-      defaultColDef: {
-        flex: 1,
-        minWidth: 100,
-        filter: true,
-        resizable: true,
-      },
-      modules: [ClientSideRowModelModule],
-    };
-  },
-  created() {
-    this.fetchOutages();
-  },
-  methods: {
-    async fetchOutages() {
-      try {
-        const response = await fetch("http://127.0.0.1:5000/outages");
-        if (!response.ok) throw new Error(`Failed to fetch outages: ${response.statusText}`);
-        const data = await response.json();
-        this.outages = data;
-      } catch (error) {
-        console.error("Error fetching outages:", error);
-      }
-    },
-    onRowClicked(event) {
-      this.selectedOutage = event.data;
-      this.showModal = true;
-    },
-    closeModal() {
-      this.showModal = false;
-      this.selectedOutage = null;
-    },
-    // ... existing methods (calculateDuration, toggleComplete, deleteOutage, etc.) remain unchanged
-  }
-};
-</script>
-
-<style scoped>
-/* same styles as before + modal styles if needed */
-</style>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<template>
-  <div>
-    <h1 class="text-2xl font-bold mb-4">Outage Tracker</h1>
-
-    <ag-grid-vue
-      class="ag-theme-alpine-dark"
-      style="width: 100%; height: 500px;"
-      :rowData="outages"
-      :columnDefs="columnDefs"
-      :defaultColDef="defaultColDef"
-      :pagination="true"
-      :paginationPageSize="20"
-      :modules="modules"
-      @cell-clicked="onCellClicked"
-    ></ag-grid-vue>
   </div>
 </template>
 
@@ -441,27 +68,25 @@ export default {
           valueGetter: params => this.calculateDuration(params.data.start, params.data.end)
         },
         { field: 'service', headerName: 'Service', sortable: true },
-        { field: 'comment', headerName: 'Comment', sortable: true },
         { field: 'engineer', headerName: 'Engineer', sortable: true },
-        { 
-          field: 'actions', 
-          headerName: 'Actions', 
-          sortable: false,
-          cellRenderer: function(params) {
-            const completeClass = params.data.complete === 'Y' ? 'text-green-500' : 'text-gray-400';
-            const completeTitle = params.data.complete === 'Y' ? 'Mark as Incomplete' : 'Mark as Complete';
-            
-            return `
-              <div style="display: flex; gap: 10px; justify-content: center;">
-                <button data-action="complete" data-id="${params.data.id}" class="action-button" title="${completeTitle}">
-                  <span class="${completeClass}" style="font-size: 18px;">✓</span>
-                </button>
-                <button data-action="delete" data-id="${params.data.id}" class="action-button" title="Delete Outage">
-                  <span style="color: #EF4444; font-size: 18px;">×</span>
-                </button>
-              </div>
-            `;
+        {
+          field: 'latestComment',
+          headerName: 'Latest Comment',
+          sortable: true,
+          valueGetter: params => {
+            const comments = params.data.comments;
+            if (comments && comments.length > 0) {
+              const sortedComments = comments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+              return sortedComments[0].comment;
+            }
+            return 'No comments';
           }
+        },
+        {
+          field: 'complete',
+          headerName: 'Completed',
+          sortable: true,
+          valueGetter: params => (params.data.complete === 'Y' ? 'Yes' : 'No'),
         }
       ],
       defaultColDef: {
@@ -472,7 +97,9 @@ export default {
       },
       sortField: null,
       sortOrder: null,
-      modules: [ClientSideRowModelModule]
+      modules: [ClientSideRowModelModule],
+      showModal: false,
+      selectedOutage: null,
     };
   },
   async created() {
@@ -601,8 +228,20 @@ export default {
     },
     async toggleComplete(outage) {
       try {
+        // Toggle the complete status
         outage.complete = outage.complete === 'Y' ? 'N' : 'Y';
-        const updatedOutage = { ...outage, complete: outage.complete };
+
+        // Create a copy of the outage object without the comments field
+        const updatedOutage = { ...outage };
+        delete updatedOutage.comments;
+
+        // Convert the date field to 'YYYY-MM-DD' format
+        if (updatedOutage.date) {
+          const date = new Date(updatedOutage.date);
+          updatedOutage.date = date.toISOString().split('T')[0]; // Extract 'YYYY-MM-DD'
+        }
+
+        // Send the update to the backend
         const response = await fetch(`http://127.0.0.1:5000/outage/${outage.id}`, {
           method: "PUT",
           headers: {
@@ -610,9 +249,16 @@ export default {
           },
           body: JSON.stringify(updatedOutage),
         });
-        
+
         if (!response.ok) {
           throw new Error(`Failed to update outage: ${response.statusText}`);
+        }
+
+        // Update the local data
+        const index = this.outages.findIndex(o => o.id === outage.id);
+        if (index !== -1) {
+          // Replace the object in the array to trigger reactivity
+          this.outages.splice(index, 1, { ...updatedOutage });
         }
       } catch (error) {
         console.error("Error updating outage:", error);
@@ -632,22 +278,13 @@ export default {
         console.error('Error:', error);
       }
     },
-    onCellClicked(params) {
-      // Only handle clicks on buttons
-      const target = params.event.target;
-      const button = target.closest('[data-action]');
-      
-      if (!button) return;
-      
-      const action = button.getAttribute('data-action');
-      const id = button.getAttribute('data-id');
-      
-      if (action === 'complete') {
-        const outage = this.outages.find(o => o.id === id);
-        if (outage) this.toggleComplete(outage);
-      } else if (action === 'delete') {
-        this.deleteOutage(id);
-      }
+    onRowClicked(event) {
+      this.selectedOutage = { ...event.data }; // Clone the data to avoid direct mutation
+      this.showModal = true;
+    },
+    closeModal() {
+      this.showModal = false;
+      this.selectedOutage = null;
     },
   }
 };
@@ -657,286 +294,18 @@ export default {
 @import 'ag-grid-community/styles/ag-grid.css';
 @import 'ag-grid-community/styles/ag-theme-alpine.css';
 
-/* Custom dark theme */
-.ag-theme-alpine {
-  --ag-background-color: #1e1e1e;
-  --ag-foreground-color: #fff;
-  --ag-border-color: #444;
-  --ag-header-background-color: #333;
-  --ag-header-foreground-color: #fff;
-  --ag-odd-row-background-color: #262626;
-  --ag-row-hover-color: rgba(255, 255, 255, 0.1);
-  --ag-selected-row-background-color: rgba(0, 120, 215, 0.3);
+/* Add styles for the toggle */
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: var(--ag-foreground-color);
 }
 
-.table-header {
-  padding: 10px;
-  background: #1e3a8a; /* Dark blue header */
-  color: white;
-  font-size: 18px;
-  border-radius: 6px;
-}
-
-.action-button {
-  background: transparent;
-  border: none;
+.toggle-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
   cursor: pointer;
-  padding: 4px 8px;
-}
-
-.action-button:hover {
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px;
-}
-
-.text-green-500 {
-  color: #10B981;
-}
-
-.text-gray-400 {
-  color: #9CA3AF;
-}
-</style>
-
-
-<template>
-  <div class="form-container">
-    <h2 class="text-xl font-bold mb-4">Add Outage</h2>
-    <form @submit.prevent="handleSubmit">
-      <div class="form-group">
-        <label for="date">Date</label>
-        <input
-          id="date"
-          v-model="form.date"
-          type="date"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="outageType">Outage Type</label>
-        <select id="outageType" v-model="form.outageType" class="form-control">
-          <option>Patching</option>
-          <option>GPU</option>
-          <option>Compute</option>
-          <option>VDI</option>
-          <option>Storage</option>
-          <option>Change</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label for="service">Service</label>
-        <select id="service" v-model="form.service" class="form-control">
-          <option>MLaaS</option>
-          <option>DT4D</option>
-          <option>Big Data</option>
-          <option>DTR</option>
-          <option>SVDI</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label for="planned">Planned</label>
-        <select id="planned" v-model="form.planned" class="form-control">
-          <option>Yes</option>
-          <option>No</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label for="start">Start</label>
-        <input
-          id="start"
-          v-model="form.start"
-          type="time"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="end">End</label>
-        <input
-          id="end"
-          v-model="form.end"
-          type="time"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="comment">Comment</label>
-        <input
-          id="comment"
-          v-model="form.comment"
-          type="text"
-          class="form-control"
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="engineer">Engineer</label>
-        <input
-          id="engineer"
-          v-model="form.engineer"
-          type="text"
-          class="form-control"
-        />
-      </div>
-
-      <div class="button-group">
-        <button type="submit" class="submit-button">Submit</button>
-      </div>
-    </form>
-
-    <!-- Optional: show success/error messages -->
-    <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
-    <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
-  </div>
-</template>
-
-<script>
-export default {
-  name: "OutageForm",
-  data() {
-    return {
-      form: this.getDefaultFormValues(),
-      successMessage: "",
-      errorMessage: "",
-    };
-  },
-  methods: {
-    getDefaultFormValues() {
-      // Existing implementation remains the same
-      const rightNow = new Date();
-      
-      const currentYear = rightNow.getFullYear();
-      const currentMonth = String(rightNow.getMonth() + 1).padStart(2, '0');
-      const currentDay = String(rightNow.getDate()).padStart(2, '0');
-      const formattedDate = `${currentYear}-${currentMonth}-${currentDay}`;
-      
-      const currentHours = String(rightNow.getHours()).padStart(2, '0');
-      const currentMinutes = String(rightNow.getMinutes()).padStart(2, '0');
-      const formattedTime = `${currentHours}:${currentMinutes}`;
-      
-      return {
-        date: formattedDate,
-        outageType: "",
-        service: "",
-        planned: "",
-        start: formattedTime,
-        end: "",
-        comment: "",
-        engineer: "",
-      };
-    },
-    
-    async handleSubmit() {
-      this.successMessage = "";
-      this.errorMessage = "";
-      console.log("JSON:" + JSON.stringify(this.form))
-
-      try {
-        const response = await fetch("http://127.0.0.1:5000/outages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(this.form),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to create outage");
-        }
-
-        const result = await response.json();
-        this.successMessage = `Outage (ID: ${result.id}) created successfully!`;
-        
-        // Show success message briefly then redirect
-        setTimeout(() => {
-          this.$router.push('/');
-        }, 800); // Short delay to show success message
-        
-      } catch (error) {
-        console.error("Error creating outage:", error);
-        this.errorMessage = error.message;
-      }
-    },
-  },
-};
-</script>
-
-<style scoped>
-/* Success/error styles remain unchanged */
-.success-message {
-  color: #38a169; /* green */
-  margin-top: 1rem;
-}
-.error-message {
-  color: #e53e3e; /* red */
-  margin-top: 1rem;
-}
-
-/* Updated Chrome autofill fix for dark background */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-select:-webkit-autofill,
-select:-webkit-autofill:hover,
-select:-webkit-autofill:focus {
-  /* Change from white to your dark background color */
-  -webkit-box-shadow: 0 0 0 1000px #2d3748 inset !important;
-  box-shadow: 0 0 0 1000px #2d3748 inset !important;
-  -webkit-text-fill-color: #ffffff !important;
-  caret-color: #ffffff;
-  border-color: #4a5568;
-  transition-delay: 9999s;
-  transition-property: background-color;
-}
-
-/* Remove the animation approach since we're directly setting colors */
-</style>
-
-
-
-<template>
-  <nav>
-    <router-link to="/">Outages</router-link> |
-    <router-link to="/add">Add</router-link> |
-    <router-link v-if="!isAuthenticated" to="/login">Login</router-link>
-    <router-link v-if="isAuthenticated" to="/logout">Logout</router-link>
-  </nav>
-  <router-view></router-view>
-</template>
-
-<script>
-export default {
-  name: 'App',
-  data() {
-    return {
-      isAuthenticated: false
-    }
-  },
-  created() {
-    // Check if user is already authenticated (from localStorage, session, etc.)
-    this.checkAuthStatus();
-  },
-  methods: {
-    checkAuthStatus() {
-      // Example: Check localStorage for auth token
-      const token = localStorage.getItem('authToken');
-      this.isAuthenticated = !!token;
-    }
-  }
-};
-</script>
-
-<style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-  margin-top: 60px;
 }
 </style>
